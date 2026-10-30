@@ -1,0 +1,417 @@
+const THREE = window.THREE;
+import { TextureFactory } from '../graphics/TextureFactory.js';
+import { GibPart } from '../world/GibPart.js';
+import { checkLineOfSight } from '../world/LineOfSight.js';
+
+/**
+ * Exploder Necromorph Entity
+ * Features:
+ * - Mutated humanoid with a giant, pulsating, glowing volatile rectangular amber sac on its left arm
+ * - High-risk suicidal behavior: runs toward Isaac to trigger a lethal explosion
+ * - Dismemberment architecture matching Necromorph.js (head decapitation, leg crawling, proper GibPart creation)
+ * - Decapitation headshot kills Exploder immediately, leaving the volatile sac intact on the corpse or floor
+ * - Shooting the sac (living or dead) detonates a massive AoE blast
+ */
+export class Exploder {
+  constructor(scene, soundSystem, spawnPos, gibList, bloodSys) {
+    this.scene = scene;
+    this.sound = soundSystem;
+    this.gibList = gibList;
+    this.bloodSys = bloodSys;
+
+    this.type = 'exploder';
+    this.hp = 100;
+    this.isDead = false;
+    this.exploded = false;
+    this.state = 'PATROL';
+    this.patrolTimer = 0;
+    this.patrolDir = Math.random() * Math.PI * 2;
+
+    this.baseSpeed = 3.2; // Runs faster than regular Slasher
+    this.speed = this.baseSpeed;
+    this.explodeRange = 1.8;
+    this.squealTimer = 0;
+    this.fuseTimer = 0;
+    this.isDetonating = false;
+
+    // Limb Tracking
+    this.hasHead = true;
+    this.hasSac = true;
+    this.hasArmR = true;
+    this.hasLegL = true;
+    this.hasLegR = true;
+    this.isCrawling = false;
+
+    this.root = new THREE.Group();
+    this.root.position.copy(spawnPos);
+    this.scene.add(this.root);
+
+    this.matSkin = new THREE.MeshStandardMaterial({
+      map: TextureFactory.createNecroSkin(),
+      roughness: 0.75,
+      metalness: 0.1
+    });
+
+    // Volatile glowing orange/yellow organic explosive material
+    this.matSac = new THREE.MeshStandardMaterial({
+      color: 0xffaa00,
+      emissive: 0xff5500,
+      emissiveIntensity: 0.85,
+      roughness: 0.2,
+      metalness: 0.1
+    });
+
+    this.buildBody();
+  }
+
+  tagLimb(mesh, type, hp) {
+    mesh.isLimb = true;
+    mesh.limbType = type;
+    mesh.limbHp = hp;
+    mesh.enemyRef = this;
+  }
+
+  buildBody() {
+    // 1. Hunched Torso
+    const torsoGeo = new THREE.BoxGeometry(0.52, 0.75, 0.38);
+    this.torsoMesh = new THREE.Mesh(torsoGeo, this.matSkin);
+    this.torsoMesh.position.y = 1.05;
+    this.torsoMesh.rotation.x = 0.2; // Hunched forward
+    this.tagLimb(this.torsoMesh, 'torso', 999);
+    this.root.add(this.torsoMesh);
+
+    // 2. Twisted Head (HP: 25)
+    const headGeo = new THREE.BoxGeometry(0.28, 0.32, 0.32);
+    this.headMesh = new THREE.Mesh(headGeo, this.matSkin);
+    this.headMesh.position.set(0, 0.52, 0.12);
+    this.tagLimb(this.headMesh, 'head', 25);
+    this.torsoMesh.add(this.headMesh);
+
+    // 3. Volatile Explosive Sac Arm (Left) (HP: 18 - 1 shot detonates it!)
+    this.armLGroup = new THREE.Group();
+    this.armLGroup.position.set(-0.38, 0.25, 0.05);
+
+    // Stumpy shoulder
+    const shoulderGeo = new THREE.BoxGeometry(0.2, 0.28, 0.2);
+    const shoulderMesh = new THREE.Mesh(shoulderGeo, this.matSkin);
+    shoulderMesh.position.y = -0.12;
+    this.armLGroup.add(shoulderMesh);
+
+    // Grotesque rectangular mutated explosive sac cluster (fits the cuboid modular aesthetic)
+    this.sacGroup = new THREE.Group();
+    this.sacGroup.position.set(-0.15, -0.45, 0.15);
+
+    // Main rectangular explosive core box
+    const mainSacGeo = new THREE.BoxGeometry(0.44, 0.65, 0.44);
+    this.sacMesh = new THREE.Mesh(mainSacGeo, this.matSac);
+    this.sacGroup.add(this.sacMesh);
+
+    // Secondary protruding angular pustules
+    const pustuleGeo1 = new THREE.BoxGeometry(0.25, 0.28, 0.25);
+    const pustule1 = new THREE.Mesh(pustuleGeo1, this.matSac);
+    pustule1.position.set(-0.14, 0.16, 0.08);
+    pustule1.rotation.set(0.1, 0.2, -0.15);
+    this.sacGroup.add(pustule1);
+
+    const pustuleGeo2 = new THREE.BoxGeometry(0.26, 0.24, 0.28);
+    const pustule2 = new THREE.Mesh(pustuleGeo2, this.matSac);
+    pustule2.position.set(0.12, -0.18, -0.08);
+    pustule2.rotation.set(-0.1, -0.15, 0.1);
+    this.sacGroup.add(pustule2);
+
+    this.armLGroup.add(this.sacGroup);
+
+    // Glowing sac core point light
+    this.sacLight = new THREE.PointLight(0xff7700, 1.8, 4.0);
+    this.sacLight.position.set(-0.15, -0.45, 0.15);
+    this.armLGroup.add(this.sacLight);
+
+    this.tagLimb(this.sacMesh, 'explosive_sac', 18);
+    this.tagLimb(pustule1, 'explosive_sac', 18);
+    this.tagLimb(pustule2, 'explosive_sac', 18);
+    this.tagLimb(shoulderMesh, 'explosive_sac', 18);
+    this.torsoMesh.add(this.armLGroup);
+
+    // 4. Right Arm (Deformed claw) (HP: 25)
+    this.armRGroup = new THREE.Group();
+    this.armRGroup.position.set(0.38, 0.25, 0);
+    const armRGeo = new THREE.BoxGeometry(0.16, 0.55, 0.16);
+    this.armRMesh = new THREE.Mesh(armRGeo, this.matSkin);
+    this.armRMesh.position.y = -0.25;
+    this.tagLimb(this.armRMesh, 'arm_right', 25);
+    this.armRGroup.add(this.armRMesh);
+    this.torsoMesh.add(this.armRGroup);
+
+    // 5. Left Leg (HP: 25)
+    this.legLGroup = new THREE.Group();
+    this.legLGroup.position.set(-0.18, -0.38, 0);
+    const legGeo = new THREE.BoxGeometry(0.18, 0.72, 0.18);
+    this.legLMesh = new THREE.Mesh(legGeo, this.matSkin);
+    this.legLMesh.position.y = -0.35;
+    this.tagLimb(this.legLMesh, 'leg_left', 25);
+    this.legLGroup.add(this.legLMesh);
+    this.torsoMesh.add(this.legLGroup);
+
+    // 6. Right Leg (HP: 25)
+    this.legRGroup = new THREE.Group();
+    this.legRGroup.position.set(0.18, -0.38, 0);
+    this.legRMesh = new THREE.Mesh(legGeo, this.matSkin);
+    this.legRMesh.position.y = -0.35;
+    this.tagLimb(this.legRMesh, 'leg_right', 25);
+    this.legRGroup.add(this.legRMesh);
+    this.torsoMesh.add(this.legRGroup);
+  }
+
+  severLimb(limbType, hitNormal) {
+    if (this.isDead && limbType !== 'explosive_sac') return;
+
+    // Shooting the explosive sac directly triggers a violent detonation!
+    if (limbType === 'explosive_sac') {
+      this.explode(true);
+      return;
+    }
+
+    let targetMesh = null;
+    let parentGroup = null;
+
+    if (limbType === 'head' && this.hasHead) {
+      this.hasHead = false;
+      targetMesh = this.headMesh;
+      parentGroup = this.torsoMesh;
+      this.sound.playDismember();
+      this.die(); // Instant decapitation kill, sac stays intact!
+    } else if (limbType === 'arm_right' && this.hasArmR) {
+      this.hasArmR = false;
+      targetMesh = this.armRGroup;
+      parentGroup = this.torsoMesh;
+      this.sound.playDismember();
+      this.hp -= 40;
+    } else if (limbType === 'leg_left' && this.hasLegL) {
+      this.hasLegL = false;
+      targetMesh = this.legLGroup;
+      parentGroup = this.torsoMesh;
+      this.sound.playDismember();
+      this.hp -= 35;
+      this.speed = 1.3;
+    } else if (limbType === 'leg_right' && this.hasLegR) {
+      this.hasLegR = false;
+      targetMesh = this.legRGroup;
+      parentGroup = this.torsoMesh;
+      this.sound.playDismember();
+      this.hp -= 35;
+      this.speed = 1.3;
+    }
+
+    if (targetMesh && parentGroup) {
+      const worldPos = new THREE.Vector3();
+      const worldQuat = new THREE.Quaternion();
+      targetMesh.getWorldPosition(worldPos);
+      targetMesh.getWorldQuaternion(worldQuat);
+
+      parentGroup.remove(targetMesh);
+
+      const gibGeo = targetMesh instanceof THREE.Group
+        ? new THREE.BoxGeometry(0.2, 0.65, 0.2)
+        : targetMesh.geometry.clone();
+      this.gibList.push(new GibPart(this.scene, gibGeo, this.matSkin, worldPos, worldQuat, hitNormal || new THREE.Vector3(0, 1, 0)));
+
+      this.bloodSys.spawnSplatter(worldPos, hitNormal || new THREE.Vector3(0, 1, 0), 28);
+
+      // Exactly matching Necromorph crawling architecture
+      if (!this.hasLegL && !this.hasLegR && !this.isCrawling) {
+        this.isCrawling = true;
+        this.torsoMesh.position.y = 0.42;
+        this.torsoMesh.rotation.x = Math.PI / 2.3;
+        this.speed = 1.0;
+      }
+
+      if (this.hp <= 0) {
+        this.die();
+      }
+    }
+  }
+
+  takeTorsoDamage(amount, hitPos, hitNormal) {
+    if (this.isDead) return;
+    this.hp -= amount;
+    this.bloodSys.spawnSplatter(hitPos, hitNormal, 12);
+    if (this.hp <= 0) this.die();
+  }
+
+  explode(instigatedByPlayer = false) {
+    if (this.exploded) return;
+    this.exploded = true;
+    this.isDead = true;
+    this.hasSac = false;
+
+    const blastCenter = new THREE.Vector3();
+    if (this.sacGroup) {
+      this.sacGroup.getWorldPosition(blastCenter);
+    } else {
+      blastCenter.copy(this.root.position).add(new THREE.Vector3(0, 0.5, 0));
+    }
+
+    this.sound.playExplosion();
+    this.bloodSys.spawnExplosionBlast(blastCenter, 60);
+
+    if (this.sacGroup && this.sacGroup.parent) {
+      this.sacGroup.parent.remove(this.sacGroup);
+    }
+    if (this.sacLight && this.sacLight.parent) {
+      this.sacLight.parent.remove(this.sacLight);
+    }
+
+    if (this.onExplosionCallback) {
+      this.onExplosionCallback(blastCenter, 5.5, 65, instigatedByPlayer);
+    }
+  }
+
+  die() {
+    if (this.isDead) return;
+    this.isDead = true;
+    this.sound.playNecroGrowl(false);
+
+    this.torsoMesh.position.y = 0.22;
+    this.torsoMesh.rotation.x = Math.PI / 2;
+    this.torsoMesh.rotation.z = (Math.random() - 0.5) * 0.8;
+
+    // Volatile explosive sac stays active and shootable on corpse or ground!
+    if (this.hasSac && this.sacLight) {
+      this.sacLight.intensity = 0.9;
+      this.matSac.emissiveIntensity = 0.6;
+    }
+  }
+
+  alertNearby(pos) {
+    if (this.isDead || this.state === 'CHASE') return;
+    const dist = this.root.position.distanceTo(pos);
+    if (dist < 12.0) {
+      this.state = 'CHASE';
+      this.sound.playExploderSqueal();
+    }
+  }
+
+  update(dt, player, colliders) {
+    if (this.isDead) {
+      // If dead but sac is intact, maintain a low volatile breathing pulse
+      if (this.hasSac && this.sacLight && !this.exploded) {
+        const slowPulse = 0.7 + Math.sin(Date.now() * 0.005) * 0.3;
+        this.sacLight.intensity = slowPulse;
+        this.matSac.emissiveIntensity = slowPulse * 0.7;
+      }
+      return;
+    }
+
+    // Pulsate glowing amber sac
+    if (this.hasSac && this.sacLight) {
+      const pulse = 0.8 + Math.sin(Date.now() * 0.012) * 0.4;
+      this.sacLight.intensity = pulse * (this.isDetonating ? 3.0 : 1.8);
+      this.matSac.emissiveIntensity = pulse * (this.isDetonating ? 1.8 : 0.85);
+    }
+
+    const enemyEyePos = this.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+    const playerTorsoPos = player.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
+    const toPlayer = new THREE.Vector3().subVectors(player.root.position, this.root.position);
+    const dist = toPlayer.length();
+
+    const hasLoS = checkLineOfSight(enemyEyePos, playerTorsoPos, colliders);
+
+    if (this.state === 'PATROL') {
+      if (dist < 9.0 && hasLoS) {
+        this.state = 'CHASE';
+        this.sound.playExploderSqueal();
+      } else {
+        this.patrolTimer -= dt;
+        if (this.patrolTimer <= 0) {
+          this.patrolTimer = Math.random() * 3.0 + 2.0;
+          this.patrolDir = Math.random() * Math.PI * 2;
+        }
+
+        const moveVec = new THREE.Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar((this.isCrawling ? 0.45 : 0.9) * dt);
+        const nextPos = this.root.position.clone().add(moveVec);
+
+        const testBox = new THREE.Box3(
+          new THREE.Vector3(nextPos.x - 0.45, 0.1, nextPos.z - 0.45),
+          new THREE.Vector3(nextPos.x + 0.45, this.isCrawling ? 0.7 : 1.8, nextPos.z + 0.45)
+        );
+
+        let blocked = false;
+        for (let i = 0; i < colliders.length; i++) {
+          if (testBox.intersectsBox(colliders[i])) {
+            blocked = true;
+            break;
+          }
+        }
+
+        if (!blocked) {
+          this.root.position.copy(nextPos);
+        } else {
+          this.patrolDir += Math.PI * 0.5 + Math.random() * Math.PI;
+          this.patrolTimer = Math.random() * 2.0 + 1.0;
+        }
+        this.root.rotation.y = this.patrolDir;
+      }
+    } else if (this.state === 'CHASE') {
+      toPlayer.y = 0;
+      const angle = Math.atan2(toPlayer.x, toPlayer.z);
+      this.root.rotation.y = angle;
+
+      // Occasional suicidal squeal
+      this.squealTimer -= dt;
+      if (this.squealTimer <= 0) {
+        this.squealTimer = Math.random() * 2.5 + 2.0;
+        this.sound.playExploderSqueal();
+      }
+
+      // Close enough to detonate
+      if (dist <= this.explodeRange && !this.isDetonating) {
+        this.isDetonating = true;
+        this.fuseTimer = 0.25; // 0.25s fuse
+      }
+
+      if (this.isDetonating) {
+        this.fuseTimer -= dt;
+        if (this.armLGroup) this.armLGroup.rotation.x = -Math.PI / 1.5;
+        if (this.fuseTimer <= 0) {
+          this.explode(false);
+          return;
+        }
+      } else {
+        // Move towards player
+        toPlayer.normalize();
+        const moveStep = toPlayer.clone().multiplyScalar(this.speed * dt);
+        const nextPos = this.root.position.clone().add(moveStep);
+
+        const testBox = new THREE.Box3(
+          new THREE.Vector3(nextPos.x - 0.45, 0.1, nextPos.z - 0.45),
+          new THREE.Vector3(nextPos.x + 0.45, this.isCrawling ? 0.7 : 1.8, nextPos.z + 0.45)
+        );
+
+        let blocked = false;
+        for (let i = 0; i < colliders.length; i++) {
+          if (testBox.intersectsBox(colliders[i])) {
+            blocked = true;
+            break;
+          }
+        }
+
+        if (!blocked) {
+          this.root.position.copy(nextPos);
+        }
+
+        const t = Date.now() * 0.012;
+        if (!this.isCrawling) {
+          if (this.hasLegL && this.legLGroup) this.legLGroup.rotation.x = Math.sin(t) * 0.6;
+          if (this.hasLegR && this.legRGroup) this.legRGroup.rotation.x = -Math.sin(t) * 0.6;
+          if (this.hasArmR && this.armRGroup) this.armRGroup.rotation.x = -Math.sin(t) * 0.7;
+          this.torsoMesh.rotation.z = Math.sin(t * 0.5) * 0.15;
+        } else {
+          // Exactly matching Necromorph crawler animation
+          if (this.hasArmR && this.armRGroup) this.armRGroup.rotation.x = Math.sin(t * 1.5) * 1.1;
+          if (this.hasSac && this.armLGroup) this.armLGroup.rotation.x = -Math.sin(t * 1.5) * 0.8;
+          this.torsoMesh.rotation.z = Math.sin(t * 0.5) * 0.15;
+        }
+      }
+    }
+  }
+}

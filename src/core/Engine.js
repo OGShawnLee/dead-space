@@ -5,11 +5,13 @@ import { ShipLevel } from '../world/ShipLevel.js';
 import { BloodParticleSystem } from '../graphics/BloodParticleSystem.js';
 import { Player } from '../entities/Player.js';
 import { Necromorph } from '../entities/Necromorph.js';
+import { Exploder } from '../entities/Exploder.js';
+import { Leaper } from '../entities/Leaper.js';
 import { ThirdPersonCamera } from '../camera/ThirdPersonCamera.js';
 
 /**
  * Dead Space Game Engine Core
- * Coordinates scene, rendering, update loop, combat raycasts, and state transitions.
+ * Coordinates scene, rendering, update loop, combat raycasts, enemy variants, and state transitions.
  */
 export class DeadSpaceGame {
   constructor() {
@@ -50,7 +52,7 @@ export class DeadSpaceGame {
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.FogExp2(0x050608, 0.08);
 
-    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+    this.camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 100);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -70,10 +72,73 @@ export class DeadSpaceGame {
   }
 
   spawnEnemies() {
-    this.level.spawnPoints.forEach(pos => {
-      const necro = new Necromorph(this.scene, this.sound, pos, this.gibs, this.bloodSys);
-      this.enemies.push(necro);
+    this.level.spawnPoints.forEach((pos, idx) => {
+      let enemy;
+      // Distribute variants: 50% Slasher, 25% Exploder, 25% Leaper
+      const variantRoll = (idx % 4);
+      if (variantRoll === 1) {
+        enemy = new Exploder(this.scene, this.sound, pos, this.gibs, this.bloodSys);
+        enemy.onExplosionCallback = (blastPos, radius, maxDmg, byPlayer) => {
+          this.handleExplosionAoE(blastPos, radius, maxDmg, byPlayer);
+        };
+      } else if (variantRoll === 3) {
+        enemy = new Leaper(this.scene, this.sound, pos, this.gibs, this.bloodSys);
+      } else {
+        enemy = new Necromorph(this.scene, this.sound, pos, this.gibs, this.bloodSys);
+      }
+      this.enemies.push(enemy);
     });
+    this.updateThreatCounter();
+  }
+
+  handleExplosionAoE(blastPos, radius, maxDmg, byPlayer) {
+    // Damage player if within blast radius
+    const distToPlayer = blastPos.distanceTo(this.player.root.position);
+    if (distToPlayer <= radius && !this.player.isDead) {
+      const dmgFactor = Math.max(0.2, 1.0 - (distToPlayer / radius));
+      const playerDmg = Math.round(maxDmg * dmgFactor);
+      this.player.takeDamage(playerDmg);
+      this.showPrompt('¡ONDA EXPANSIVA DETONADA!');
+    }
+
+    // Damage & dismember other enemies caught in the explosion (including volatile unexploded sacs on dead exploders!)
+    this.enemies.forEach(other => {
+      const isAliveOrVolatile = !other.isDead || (other.type === 'exploder' && other.hasSac && !other.exploded);
+      if (isAliveOrVolatile && other.root.position.distanceTo(blastPos) <= radius) {
+        const d = other.root.position.distanceTo(blastPos);
+        const dmgFactor = Math.max(0.3, 1.0 - (d / radius));
+        const dmg = Math.round(110 * dmgFactor);
+
+        const awayDir = new THREE.Vector3().subVectors(other.root.position, blastPos).normalize();
+        if (other.type === 'exploder' && !other.exploded) {
+          // Chain reaction detonation!
+          other.explode(true);
+        } else if (other.type === 'leaper') {
+          other.takeTorsoDamage(dmg, other.root.position, awayDir);
+          if (other.severLimb) {
+            other.severLimb('tail', awayDir);
+            other.severLimb('arm_left', awayDir);
+          }
+          if (dmg >= 45 || other.hp <= 0) {
+            other.die();
+          }
+        } else {
+          other.takeTorsoDamage(dmg, other.root.position, awayDir);
+          // High explosive blast severs limbs
+          if (other.severLimb) {
+            other.severLimb('arm_left', awayDir);
+            other.severLimb('leg_left', awayDir);
+          }
+        }
+
+        if (other.isDead && !other.killCounted) {
+          other.killCounted = true;
+          this.statsKills++;
+          this.updateThreatCounter();
+        }
+      }
+    });
+
     this.updateThreatCounter();
   }
 
@@ -99,7 +164,8 @@ export class DeadSpaceGame {
   handleHeal() {
     if (this.player.isDead || this.gameWon) return;
     if (this.player.heal()) {
-      document.getElementById('medkit-count').textContent = this.player.medkits;
+      const medkitEl = document.getElementById('medkit-count');
+      if (medkitEl) medkitEl.textContent = this.player.medkits;
       this.showPrompt('+50 Salud inyectada');
     } else if (this.player.medkits <= 0) {
       this.showPrompt('¡No tienes botiquines!');
@@ -140,6 +206,13 @@ export class DeadSpaceGame {
         enemy.root.traverse(child => {
           if (child.isLimb) shootableLimbMeshes.push(child);
         });
+      } else if (enemy.type === 'exploder' && enemy.hasSac && !enemy.exploded) {
+        // Volatile sac on a dead exploder corpse remains shootable and explosive!
+        if (enemy.sacGroup) {
+          enemy.sacGroup.traverse(child => {
+            if (child.isLimb) shootableLimbMeshes.push(child);
+          });
+        }
       }
     });
 
@@ -157,20 +230,28 @@ export class DeadSpaceGame {
       const hitMesh = hit.object;
       const enemy = hitMesh.enemyRef;
 
-      if (enemy && !enemy.isDead) {
-        if (hitMesh.limbType === 'torso') {
-          enemy.takeTorsoDamage(10, hit.point, hit.face.normal);
-          this.showPrompt('¡Corta las extremidades! El torso absorbe el daño');
-        } else {
-          hitMesh.limbHp -= 35;
-          if (hitMesh.limbHp <= 0) {
-            enemy.severLimb(hitMesh.limbType, hit.face.normal);
-            this.statsLimbs++;
-            if (enemy.isDead) this.statsKills++;
-            this.updateThreatCounter();
+      if (enemy) {
+        if (!enemy.isDead) {
+          if (hitMesh.limbType === 'torso') {
+            enemy.takeTorsoDamage(10, hit.point, hit.face.normal);
+            this.showPrompt('¡Corta las extremidades! El torso absorbe el daño');
           } else {
-            this.bloodSys.spawnSplatter(hit.point, hit.face.normal, 15);
+            hitMesh.limbHp -= 35;
+            if (hitMesh.limbHp <= 0) {
+              enemy.severLimb(hitMesh.limbType, hit.face.normal);
+              this.statsLimbs++;
+              if (enemy.isDead && !enemy.killCounted) {
+                enemy.killCounted = true;
+                this.statsKills++;
+              }
+              this.updateThreatCounter();
+            } else {
+              this.bloodSys.spawnSplatter(hit.point, hit.face.normal, 15);
+            }
           }
+        } else if (enemy.type === 'exploder' && hitMesh.limbType === 'explosive_sac' && !enemy.exploded) {
+          // Detonate sac of dead exploder lying on floor or standing!
+          enemy.explode(true);
         }
       }
     }
@@ -215,7 +296,8 @@ export class DeadSpaceGame {
             this.showPrompt('+15 Células de Plasma recogidas');
           } else {
             this.player.medkits++;
-            document.getElementById('medkit-count').textContent = this.player.medkits;
+            const medkitEl = document.getElementById('medkit-count');
+            if (medkitEl) medkitEl.textContent = this.player.medkits;
             this.showPrompt('+1 Botiquín RIG recogido');
           }
           this.sound.playFlashlight();

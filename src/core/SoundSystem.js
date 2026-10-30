@@ -305,6 +305,90 @@ export class SoundSystem {
     thump(now + 0.14, 55, 0.5);
   }
 
+  playExplosion() {
+    if (!this.initialized) return;
+    const now = this.ctx.currentTime;
+
+    // Sub-bass shockwave
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(150, now);
+    subOsc.frequency.exponentialRampToValueAtTime(18, now + 0.65);
+    subGain.gain.setValueAtTime(1.4, now);
+    subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+    subOsc.connect(subGain);
+    subGain.connect(this.masterGain);
+    subOsc.start(now);
+    subOsc.stop(now + 0.72);
+
+    // Crackling blast noise
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.55);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(1200, now);
+    filter.frequency.exponentialRampToValueAtTime(70, now + 0.55);
+    const nGain = this.ctx.createGain();
+    nGain.gain.setValueAtTime(1.2, now);
+    nGain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+    noise.connect(filter);
+    filter.connect(nGain);
+    nGain.connect(this.masterGain);
+    noise.start(now);
+  }
+
+  playExploderSqueal() {
+    if (!this.initialized) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(320, now);
+    osc.frequency.exponentialRampToValueAtTime(920, now + 0.35);
+    gain.gain.setValueAtTime(0.55, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.38);
+  }
+
+  playLeaperScreech() {
+    if (!this.initialized) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const mod = this.ctx.createOscillator();
+    const modGain = this.ctx.createGain();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(980, now);
+    osc.frequency.exponentialRampToValueAtTime(310, now + 0.4);
+
+    mod.frequency.setValueAtTime(75, now);
+    modGain.gain.setValueAtTime(460, now);
+
+    gain.gain.setValueAtTime(0.7, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.42);
+
+    mod.connect(modGain);
+    modGain.connect(osc.frequency);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    mod.start(now);
+    osc.start(now);
+    mod.stop(now + 0.44);
+    osc.stop(now + 0.44);
+  }
+
   startAmbientDrone() {
     if (!this.initialized || this.droneOsc) return;
     const now = this.ctx.currentTime;

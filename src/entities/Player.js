@@ -101,7 +101,7 @@ export class Player {
     // Spine mounting bracket
     const spineBracket = new THREE.Mesh(
       new THREE.BoxGeometry(0.14, 0.62, 0.06),
-      new THREE.MeshStandardMaterial({ color: 0x11161d, roughness: 0.3, metalness: 0.9 })
+      darkMetalMat
     );
     spineBracket.position.set(0, 1.15, -0.32);
     this.suitGroup.add(spineBracket);
@@ -180,15 +180,16 @@ export class Player {
 
     this.ammoCanvas = TextureFactory.createHoloAmmoCanvas(this.ammo, this.maxAmmo);
     this.ammoTexture = new THREE.CanvasTexture(this.ammoCanvas);
-    const holoGeo = new THREE.PlaneGeometry(0.35, 0.18);
+    // Scaled up holographic projection for crystal-clear readability
+    const holoGeo = new THREE.PlaneGeometry(0.52, 0.27);
     this.holoMaterial = new THREE.MeshBasicMaterial({
       map: this.ammoTexture,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.92,
       side: THREE.DoubleSide
     });
     this.holoAmmoMesh = new THREE.Mesh(holoGeo, this.holoMaterial);
-    this.holoAmmoMesh.position.set(0.22, 0.2, -0.05);
+    this.holoAmmoMesh.position.set(0.28, 0.24, -0.05);
     this.holoAmmoMesh.rotation.y = -Math.PI / 6;
     this.weaponGroup.add(this.holoAmmoMesh);
 
@@ -238,22 +239,20 @@ export class Player {
 
     if (this.hp <= 25) {
       activeHex = 0xff1a1a;
-      hudClass = 'crit';
-    } else if (this.hp <= 55) {
-      activeHex = 0xff9900;
-      hudClass = 'warn';
+      hudClass = 'active critical';
+    } else if (this.hp <= 50) {
+      activeHex = 0xffaa00;
+      hudClass = 'active warning';
     }
 
-    const inactiveHex = 0x11161d;
-
-    for (let i = 0; i < totalSegs; i++) {
-      const segMesh = this.rigSegments[i];
-      if (i < activeCount) {
-        segMesh.material.color.setHex(activeHex);
+    this.rigSegments.forEach((mesh, idx) => {
+      if (idx < activeCount) {
+        mesh.material.color.setHex(activeHex);
+        mesh.visible = true;
       } else {
-        segMesh.material.color.setHex(inactiveHex);
+        mesh.visible = false;
       }
-    }
+    });
 
     if (this.rigBackLight) {
       this.rigBackLight.color.setHex(activeHex);

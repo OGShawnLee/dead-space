@@ -156,7 +156,7 @@ Upcoming experimental features and mechanics:
 - [ ] **Stasis Module**: Slow-motion projectile freezing enemies to $10\%$ speed for 5 seconds.
 - [ ] **Isaac's Stomp**: Heavy melee foot-stomp with <kbd>Space</kbd> to crush crawling enemies and crack supply crates.
 - [ ] **Plasma Cutter Rotation**: Toggle horizontal vs. vertical emitter orientation with <kbd>T</kbd>.
-- [ ] **New Necromorph Variants**:
+- [x] **New Necromorph Variants**:
   - *Exploder*: Mutated entity with a glowing volatile explosive sac on its left arm.
   - *Leaper*: Legless crawler with a barbed spinal scythe capable of long-distance lunges.
 - [ ] **Zero-G & Decompression Zones**: Magnetic boot thrusters, floating debris, and a timed oxygen meter in soundless vacuum.
