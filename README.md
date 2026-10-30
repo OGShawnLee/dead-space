@@ -1,165 +1,166 @@
 # 🛸 Dead Space: Sector Protocol (Three.js Prototype)
 
-> Prototipo jugable de un **Survival Horror en tercera persona** inspirado en el clásico *Dead Space*. Construido con **HTML5, CSS3, JavaScript ES Modules y Three.js**, ejecutándose a 60 FPS estables sin dependencias de librerías pesadas ni assets externos descargados.
+> A playable third-person **Survival Horror prototype** inspired by the classic *Dead Space*. Built with **HTML5, CSS3, JavaScript ES Modules, and Three.js**, running at a solid 60 FPS with zero heavy frameworks and zero external downloaded assets.
 
 ---
 
-## 📋 Índice
-1. [Visión General y Filosofía de Diseño](#-visión-general-y-filosofía-de-diseño)
-2. [Características Principales](#-características-principales)
-3. [Arquitectura del Proyecto (ES Modules)](#-arquitectura-del-proyecto-es-modules)
-4. [Mecánicas del Juego](#-mecánicas-del-juego)
-   - [Interfaz Diegética (RIG y Hologramas)](#interfaz-diegética-rig-y-hologramas)
-   - [Combate y Desmembramiento Quirúrgico](#combate-y-desmembramiento-quirúrgico)
-   - [Inteligencia Artificial y Línea de Visión (LoS)](#inteligencia-artificial-y-línea-de-visión-los)
-   - [Cámara Over-The-Shoulder](#cámara-over-the-shoulder)
-   - [Audio Procedural con Web Audio API](#audio-procedural-con-web-audio-api)
-5. [Controles](#-controles)
-6. [Cómo Ejecutar el Proyecto](#-cómo-ejecutar-el-proyecto)
-7. [Hoja de Ruta (Roadmap)](#-hoja-de-ruta-roadmap)
+## 📋 Table of Contents
+1. [Overview & Design Philosophy](#-overview--design-philosophy)
+2. [Key Features](#-key-features)
+3. [Modular Architecture (ES Modules)](#-modular-architecture-es-modules)
+4. [Gameplay Mechanics](#-gameplay-mechanics)
+   - [Diegetic Interface (3D RIG Spine & Holograms)](#diegetic-interface-3d-rig-spine--holograms)
+   - [Surgical Dismemberment Combat](#surgical-dismemberment-combat)
+   - [Sensory Enemy AI & Line of Sight (LoS)](#sensory-enemy-ai--line-of-sight-los)
+   - [Over-The-Shoulder Camera Controller](#over-the-shoulder-camera-controller)
+   - [Procedural Audio Engine (Web Audio API)](#procedural-audio-engine-web-audio-api)
+5. [Controls](#-controls)
+6. [How to Run](#-how-to-run)
+7. [Roadmap](#-roadmap)
 
 ---
 
-## 🌌 Visión General y Filosofía de Diseño
+## 🌌 Overview & Design Philosophy
 
-El jugador encarna a un ingeniero atrapado en los oscuros y claustrofóbicos pasillos de una nave minera abandonada, infestada por **Necromorfos**. El objetivo es explorar la nave, gestionar suministros (munición y botiquines) y abrirse paso hasta la **Cápsula de Escape**.
+The player embodies an engineer trapped in the suffocating, dark corridors of an abandoned deep-space mining vessel overrun by mutated biomechanical creatures known as **Necromorphs**. The objective is to scavenge for resources (plasma cells and medkits), survive aggressive ambushes, and navigate through the ship's labyrinth to the **Escape Shuttle Airlock**.
 
-### Reglas Inquebrantables de Implementación:
-- **Cero Assets Externos**: No se utilizan modelos 3D (`.gltf`, `.obj`) ni imágenes precargadas (`.png`, `.jpg`). Todo el entorno y los personajes están modelados a partir de **geometrías primitivas** (cajas, cilindros, conos, planos) y texturas generadas procedimentalmente en tiempo de ejecución mediante `CanvasTexture`.
-- **Cero Audio Externo**: Ningún archivo `.mp3` o `.wav`. Cada disparo, alarido, pisada, latido y chirrido es generado en tiempo real con la **Web Audio API** mediante osciladores, filtros y síntesis FM.
-- **Rendimiento a 60 FPS**: Renderizado optimizado mediante mallas modulares, iluminación calculada por distancias de atenuación y sombras suaves PCF.
-
----
-
-## ⚡ Características Principales
-
-- **Desmembramiento Táctico**: Disparar al torso de los enemigos produce un daño mínimo. Cortar brazos, piernas o cabezas es la única forma efectiva de neutralizarlos.
-- **RIG de Salud 3D Real**: Sensor de vida de Isaac modelado como una columna vertebral 3D luminosa con 6 vértebras en relieve que cambian de color (Cian $\rightarrow$ Ámbar $\rightarrow$ Rojo crítico) y proyectan luz sobre su traje.
-- **Munición Holográfica Flotante**: Proyección de plasma flotante anclada al arma que muestra las cargas restantes en tiempo real.
-- **IA Sensorial Realista**: Los enemigos no tienen visión a través de muros ("wall-hack"). Detectan al jugador por línea de visión directa, sonido de pasos cercanos o cuando el haz de la linterna los alumbra.
-- **Generación Procedural de la Nave**: Mazmorra basada en cuadrícula 2D extruida a 3D con pasillos metálicos estrechos, tuberías, luces rojas intermitentes y niebla volumétrica claustrofóbica.
+### Strict Architectural Principles:
+- **Zero External Assets**: No 3D model files (`.gltf`, `.obj`) or downloaded raster images (`.png`, `.jpg`). Everything is built from **primitive geometries** (boxes, cylinders, cones, planes) and procedurally generated textures crafted at runtime via HTML5 `CanvasTexture`.
+- **Zero External Audio Files**: No audio files (`.mp3`, `.wav`). Every gunshot, metallic reload, guttural screech, footstep, and heartbeat is synthesized dynamically via the **Web Audio API** using custom oscillators, biquad filters, and FM synthesis.
+- **60 FPS Performance**: Optimized render passes, PCF soft shadow maps, localized point light radii, and modular components designed for high-performance browser execution.
 
 ---
 
-## 📁 Arquitectura del Proyecto (ES Modules)
+## ⚡ Key Features
 
-El código está desacoplado bajo principios de alta cohesión y responsabilidad única:
+- **Strategic Dismemberment**: Center-mass shots to the torso deal negligible damage. Severing arms, scythe blades, and legs is the only effective way to neutralize threats.
+- **True 3D Extruded RIG Spine**: Isaac's signature health bar is modeled as an extruded 3D cybernetic column on his back with 6 illuminated vertebrae that shift colors (Cyan $\rightarrow$ Amber $\rightarrow$ Pulsing Alert Red) and cast a real-time point-light aura onto his suit.
+- **Floating Holographic Ammo Display**: Semi-transparent cyan HUD plane projected directly above the Plasma Cutter displaying live clip capacity and reserve cells.
+- **Realistic Sensory AI (No Wall-Hacking)**: Necromorphs respect physical geometry through raycast Line-of-Sight (LoS) checks. They detect Isaac via direct sightlines, loud gunshot acoustics, or flashlight illumination.
+- **Procedural Ship Labyrinth**: 2D grid-based dungeon extruded into 3D corridors featuring metallic floor grates, overhead conduits, flickering emergency lights, and claustrophobic volumetric fog.
+
+---
+
+## 📁 Modular Architecture (ES Modules)
+
+The codebase is organized into clean, single-responsibility modules using native ES Modules:
 
 ```text
 dead-space/
-├── index.html                   # Interfaz semántica, scanlines CRT y modales
-├── style.css                    # Estética industrial, scanlines, animaciones y HUD
-├── game.js                      # Punto de entrada limpio (Bootstrap del motor)
-├── README.md                    # Documentación técnica completa
+├── index.html                   # Semantic markup, CRT scanline overlays, and diegetic HUD
+├── style.css                    # Industrial aesthetics, retro CRT scanlines, and UI styling
+├── game.js                      # Clean entry-point bootstrap
+├── README.md                    # Comprehensive project documentation
 └── src/
     ├── core/
-    │   ├── Engine.js            # Bucle de juego, escena, renderizado y estado global
-    │   ├── InputManager.js      # Captura de periféricos, teclado y ratón
-    │   └── SoundSystem.js       # Sintetizador procedural con Web Audio API
+    │   ├── Engine.js            # Main loop, Three.js scene, renderer, combat raycasting
+    │   ├── InputManager.js      # Decoupled keyboard, mouse, and pointer-lock event handling
+    │   └── SoundSystem.js       # Real-time procedural audio synthesizer (Web Audio API)
     ├── graphics/
-    │   ├── TextureFactory.js    # Generador CanvasTexture (metal, piel, rejillas, holo)
-    │   └── BloodParticleSystem.js # Emisor de partículas de sangre y salpicaduras
+    │   ├── TextureFactory.js    # Procedural CanvasTextures (metal plates, grates, flesh, holo)
+    │   └── BloodParticleSystem.js # Real-time blood splatter particle pool and floor stains
     ├── world/
-    │   ├── ShipLevel.js         # Generación del laberinto 3D, luces y terminal de escape
-    │   ├── LineOfSight.js       # Comprobación de colisión y visibilidad por raycast
-    │   └── GibPart.js           # Física cinemática de extremidades amputadas
+    │   ├── ShipLevel.js         # 3D labyrinth generator, colliders, lights, escape zone
+    │   ├── LineOfSight.js       # Obstacle raycasting check preventing wall-cheating
+    │   └── GibPart.js           # Kinematic physics for severed limb debris
     ├── entities/
-    │   ├── Player.js            # Isaac Clarke: Espina RIG 3D, linterna y Cortador de Plasma
-    │   └── Necromorph.js        # Enemigo Slasher: hitboxes de miembros y desmembramiento
+    │   ├── Player.js            # Isaac Clarke: 3D RIG spine, flashlight, Plasma Cutter
+    │   └── Necromorph.js        # Slasher enemy: limb hierarchy, 1-shot cuts, disarming
     └── camera/
-        └── ThirdPersonCamera.js # Cámara sobre el hombro con interpolación y anti-clipping
+        └── ThirdPersonCamera.js # Over-the-shoulder smoothed camera with anti-clipping
 ```
 
 ---
 
-## 🕹️ Mecánicas del Juego
+## 🕹️ Gameplay Mechanics
 
-### Interfaz Diegética (RIG y Hologramas)
-Fiel al diseño de *Dead Space*, la información de supervivencia no satura la pantalla con barras artificiales, sino que se integra en el propio mundo del juego:
-1. **Espina Dorsal del Traje (RIG)**: 6 vértebras tridimensionales iluminadas en la espalda de Isaac.
-   - **$100\% - 75\%$**: Azul Cian brillante (`#00f0ff`).
-   - **$74\% - 40\%$**: Ámbar de advertencia (`#ff9900`).
-   - **$< 25\%$**: Rojo pulsante crítico (`#ff1a1a`), acompañado de latidos del corazón de baja frecuencia en el audio.
-2. **Proyección Holográfica de Células de Plasma**: Panel digital semi-transparente que flota sobre el Cortador de Plasma mostrando el conteo `cargador / reserva`.
+### Diegetic Interface (3D RIG Spine & Holograms)
+In true *Dead Space* tradition, essential survival data is integrated seamlessly into the game world:
+1. **Physical RIG Spine**: 6 prominent 3D vertebrae mounted along Isaac's spinal bracket.
+   - **$100\% - 75\%$**: Vibrant Neon Cyan (`#00f0ff`).
+   - **$74\% - 40\%$**: Warning Amber (`#ff9900`).
+   - **$< 25\%$**: Flashing Emergency Red (`#ff1a1a`), accompanied by acoustic sub-bass heartbeats.
+2. **Back Aura PointLight**: Casts a colored glow onto Isaac's neck, shoulders, and the ground behind him, visually communicating health status at a glance.
+3. **Weapon Ammo Hologram**: Diegetic digital readout attached to the Plasma Cutter showing `clip / reserve`.
 
-### Combate y Desmembramiento Quirúrgico
-Cada Necromorfo cuenta con una jerarquía de colisionadores independientes:
-- **Torso**: Absorbe disparos con un daño irrelevante (10 HP).
-- **Extremidades (Brazos y Piernas - 25 HP)**: El Cortador de Plasma inflige 35 de daño por impacto a las extremidades, **cercenándolas limpiamente de 1 solo tiro bien apuntado**.
-- **Amputación de ambos brazos**: El enemigo **queda completamente desarmado** (su daño de ataque pasa a 0), tambalea en agonía y se desangra hasta morir en pocos segundos.
-- **Amputación de piernas**:
-  - 1 pierna: Cojera severa con velocidad reducida al $50\%$.
-  - 2 piernas: Cae al suelo y se convierte en **Crawler**, arrastrándose lentamente con sus garras.
-- **Decapitación**: Impacto crítico mortal instantáneo.
+### Surgical Dismemberment Combat
+Each Necromorph features an independent hitbox hierarchy:
+- **Torso**: Absorbs plasma bursts with heavy resistance (10 HP damage).
+- **Limbs (Head, Arms, Blades, Legs - 25 HP)**: The Plasma Cutter delivers 35 damage per hit, **cleanly severing limbs in a single well-aimed shot**.
+- **Severing Both Arms (Disarmed State)**: If both arms are removed, the Necromorph **cannot attack** (attack damage drops to 0), stumbles in agony, and collapses into a bleed-out death within seconds.
+- **Severing Legs**:
+  - 1 leg severed: Enemy stumbles with movement speed reduced by $40\%$.
+  - Both legs severed: Drops to the floor as a **Crawler**, dragging its torso aggressively with its arms.
+- **Decapitation**: Fatal critical hit.
 
-### Inteligencia Artificial y Línea de Visión (LoS)
-El módulo `LineOfSight.js` evalúa si hay mamparos interrumpiendo la línea recta entre los ojos del Necromorfo y el torso de Isaac:
-- **A oscuras**: Rango de visión de 5 metros en línea directa; detección auditiva a menos de 2.2 metros.
-- **Con linterna encendida**: Rango de hasta 11 metros, **únicamente si el jugador está orientando el foco hacia el enemigo**.
-- **Disparos**: El estruendo de un disparo alerta a las criaturas en un radio de 10 metros que tengan ruta de acceso.
+### Sensory Enemy AI & Line of Sight (LoS)
+`LineOfSight.js` verifies whether ship bulkheads obstruct the ray between the Necromorph's head and Isaac's body:
+- **Pitch Black**: Visual detection range is limited to 5 meters along clear corridors; auditory detection triggers within 2.2 meters from footsteps.
+- **Flashlight On**: Detection extends up to 11 meters, **only if Isaac points the beam directly at the enemy**.
+- **Gunshots**: Firing the Plasma Cutter alerts unalerted Necromorphs within a 10-meter radius that have an unobstructed path.
 
-### Cámara Over-The-Shoulder
-- Cámara fijada detrás del hombro derecho con interpolación suave (`lerp`).
-- **Modo Apuntar**: Al mantener el Clic Derecho, la cámara reduce su distancia al hombro, el campo de visión se contrae de $70^\circ$ a $50^\circ$ y el paso del personaje se ralentiza para permitir disparos de precisión.
-- **Protección contra colisiones**: Un rayo de detección previene que la cámara atraviese las paredes del laberinto.
+### Over-The-Shoulder Camera Controller
+- Smoothed camera follower offset behind Isaac's right shoulder.
+- **Aim Mode**: Holding Right Click brings the camera tighter to the shoulder, reduces FOV from $70^\circ$ to $50^\circ$, slows movement for precision, and projects the guide laser.
+- **Anti-Clipping Protection**: A reverse raycast from the player's head prevents the camera from penetrating corridor walls.
 
-### Audio Procedural con Web Audio API
-- **Cortador de Plasma**: Onda diente de sierra con barrido exponencial de $1100\text{ Hz}$ a $70\text{ Hz}$ mezclada con ruido blanco filtrado en paso banda para la ionización.
-- **Recarga Metálica**: Secuencia bifásica de impactos metálicos resonantes ($1400\text{ Hz}$ y $520\text{ Hz}$).
-- **Desmembramiento**: Onda distorsionada a $320\text{ Hz}$ combinada con un estallido sordo de bajas frecuencias simulando la rotura de hueso y carne.
-- **Gruñidos y Chillidos**: Síntesis FM con modulación de frecuencia a $40\text{ Hz}$ y barridos estridentes al iniciar la persecución.
-- **Monitor Cardíaco**: Doble pulsación sub-grave (*lub-dub*) que incrementa su frecuencia cuando la vida de Isaac baja del $40\%$.
+### Procedural Audio Engine (Web Audio API)
+- **Plasma Cutter Discharge**: Downward frequency sweep ($1100\text{ Hz}$ to $70\text{ Hz}$) on a sawtooth wave combined with bandpass-filtered noise simulating gas ionization.
+- **Metallic Reload**: Two-stage mechanical clinks ($1400\text{ Hz}$ and $520\text{ Hz}$).
+- **Visceral Dismemberment**: Heavy bone snap transient ($320\text{ Hz}$) coupled with low-passed tearing noise.
+- **Necromorph Growls & Shrieks**: FM synthesis with $40\text{ Hz}$ modulation and sharp pitch drops upon aggro.
+- **Heartbeat Monitor**: Sub-bass double thump (*lub-dub*) that dynamically accelerates as Isaac's health falls below $40\%$.
 
 ---
 
-## 🎮 Controles
+## 🎮 Controls
 
-| Entrada | Acción |
+| Input | Action |
 | :--- | :--- |
-| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Desplazamiento relativo a la orientación |
-| <kbd>Ratón</kbd> | Orientación del cuerpo (Eje Y) y cabeceo de mira |
-| <kbd>Clic Derecho (Mantener)</kbd> | Modo apuntar (Zoom al hombro + mira láser) |
-| <kbd>Clic Izquierdo</kbd> | Disparar rayo de plasma |
-| <kbd>Shift Izquierdo</kbd> | Correr / sprint |
-| <kbd>R</kbd> | Recargar cargador de plasma |
-| <kbd>Q</kbd> | Inyectar botiquín (+50 de vida al RIG) |
-| <kbd>F</kbd> | Encender / apagar la linterna táctica |
-| <kbd>Escape</kbd> | Pausar y liberar el cursor del ratón |
+| <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> | Move relative to character orientation |
+| <kbd>Mouse</kbd> | Rotate body (Y-axis) & adjust camera pitch |
+| <kbd>Right Click (Hold)</kbd> | Aim mode (over-the-shoulder zoom + laser sight) |
+| <kbd>Left Click</kbd> | Fire Plasma Cutter |
+| <kbd>Left Shift</kbd> | Sprint |
+| <kbd>R</kbd> | Reload Plasma Cutter magazine |
+| <kbd>Q</kbd> | Inject Medkit (+50 RIG Health) |
+| <kbd>F</kbd> | Toggle Tactical Flashlight |
+| <kbd>Escape</kbd> | Pause game & release mouse pointer lock |
 
 ---
 
-## 🚀 Cómo Ejecutar el Proyecto
+## 🚀 How to Run
 
-Debido a que el proyecto utiliza **JavaScript ES Modules nativos** (`import` / `export`), los navegadores modernos restringen la apertura directa mediante doble clic (`file:///`) por políticas de seguridad CORS. Requiere servirse mediante un servidor HTTP local.
+Because the project relies on **native JavaScript ES Modules** (`import` / `export`), modern browsers enforce CORS security policies that block execution via direct double-click (`file:///`). It must be served through a local HTTP server.
 
-### Opción 1: Con Python (Rápido y sin instalación adicional)
-Abre una terminal en la carpeta del proyecto y ejecuta:
+### Option 1: Python (Standard & Built-in)
+Open a terminal in the project directory and run:
 ```bash
 python -m http.server 8080
 ```
-Luego abre en tu navegador: **[http://localhost:8080](http://localhost:8080)**.
+Then navigate to: **[http://localhost:8080](http://localhost:8080)**.
 
-### Opción 2: Con Node.js
+### Option 2: Node.js
 ```bash
 npx serve .
 ```
 
-### Opción 3: Con Visual Studio Code
-Instala la extensión **Live Server**, haz clic derecho sobre `index.html` y selecciona **"Open with Live Server"**.
+### Option 3: VS Code Live Server
+Install the **Live Server** extension, right-click `index.html`, and choose **"Open with Live Server"**.
 
 ---
 
-## 🛠️ Hoja de Ruta (Roadmap)
+## 🛠️ Roadmap
 
-Ideas y características planificadas para próximas versiones:
-- [ ] **Módulo de Éxtasis (*Stasis*)**: Proyectil temporal para ralentizar enemigos al $10\%$ durante 5 segundos.
-- [ ] **Pisotón de Isaac (*The Isaac Stomp*)**: Golpe demoledor con <kbd>Espacio</kbd> para rematar enemigos en el suelo y abrir cajas de loot.
-- [ ] **Rotación del Cañón (Horizontal / Vertical)**: Alternancia del modo de disparo del Cortador de Plasma con <kbd>T</kbd>.
-- [ ] **Nuevos Necromorfos**:
-  - *Exploder*: Criatura con saco explosivo reactivo en el brazo.
-  - *Leaper*: Enemigo reptador con cola afilada capaz de saltar grandes distancias.
-- [ ] **Secciones de Gravedad Cero y Descompresión**: Salto entre mamparos y temporizador de oxígeno sin sonido atmosférico.
+Upcoming experimental features and mechanics:
+- [ ] **Stasis Module**: Slow-motion projectile freezing enemies to $10\%$ speed for 5 seconds.
+- [ ] **Isaac's Stomp**: Heavy melee foot-stomp with <kbd>Space</kbd> to crush crawling enemies and crack supply crates.
+- [ ] **Plasma Cutter Rotation**: Toggle horizontal vs. vertical emitter orientation with <kbd>T</kbd>.
+- [ ] **New Necromorph Variants**:
+  - *Exploder*: Mutated entity with a glowing volatile explosive sac on its left arm.
+  - *Leaper*: Legless crawler with a barbed spinal scythe capable of long-distance lunges.
+- [ ] **Zero-G & Decompression Zones**: Magnetic boot thrusters, floating debris, and a timed oxygen meter in soundless vacuum.
 
 ---
 
-*Desarrollado como prototipo técnico de alta fidelidad en WebGL y Three.js.*
+*Engineered as a high-fidelity WebGL / Three.js technical showcase.*
