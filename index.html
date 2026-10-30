@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dead Space: Sector Protocol (Three.js Prototype)</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <!-- Canvas 3D -->
+  <div id="game-container"></div>
+
+  <!-- Diegetic CRT Overlay & Scanlines -->
+  <div class="crt-overlay"></div>
+  <div class="vignette-overlay"></div>
+  <div class="damage-flash" id="damage-flash"></div>
+
+  <!-- Minimal HUD (Diegetic Aesthetic) -->
+  <div id="hud">
+    <!-- Top Left Objective & Diagnostics -->
+    <div class="hud-top-left">
+      <div class="rig-status-badge">
+        <span class="rig-pulse"></span>
+        <span class="rig-text">C.E.C. RIG ENLAZADO // BIOS v4.2</span>
+      </div>
+      <!-- HUD Segmented RIG Health Display -->
+      <div class="hud-health-bar-container">
+        <span class="rig-health-label">RIG VITAL:</span>
+        <div class="rig-segments" id="hud-rig-segments">
+          <div class="segment active"></div>
+          <div class="segment active"></div>
+          <div class="segment active"></div>
+          <div class="segment active"></div>
+          <div class="segment active"></div>
+          <div class="segment active"></div>
+        </div>
+        <span id="hud-hp-val" class="rig-hp-val">100%</span>
+      </div>
+      <div class="hud-objective-box">
+        <div class="objective-header">MISIÓN PRIORITARIA</div>
+        <div class="objective-desc" id="objective-text">Explora los sectores oscuros y llega a la CÁPSULA DE ESCAPE.</div>
+      </div>
+      <div class="threat-counter">
+        AMENAZAS ACTIVAS: <span id="enemies-alive-count" class="highlight-val">--</span>
+      </div>
+    </div>
+
+    <!-- Top Right Medkit / Inventory Quick Display -->
+    <div class="hud-top-right">
+      <div class="supply-box">
+        <div class="supply-label">BOTIQUINES [Q]</div>
+        <div class="supply-value" id="medkit-count">2</div>
+      </div>
+      <div class="supply-box">
+        <div class="supply-label">LINTERNA [F]</div>
+        <div class="supply-value status-active" id="flashlight-status">ON</div>
+      </div>
+    </div>
+
+    <!-- Center Laser Reticle (Visible only when aiming) -->
+    <div id="crosshair" class="crosshair-hidden">
+      <div class="plasma-bracket left"></div>
+      <div class="plasma-dot"></div>
+      <div class="plasma-bracket right"></div>
+    </div>
+
+    <!-- Bottom Center Contextual Notifications -->
+    <div id="prompt-bar" class="prompt-bar-hidden">
+      <span id="prompt-message">Presiona [R] para recargar</span>
+    </div>
+  </div>
+
+  <!-- Start Screen / Instructions Modal -->
+  <div id="start-screen" class="overlay-modal active">
+    <div class="modal-card">
+      <div class="suit-logo">C.E.C. DEEP SPACE MINING</div>
+      <h1 class="glitch-title" data-text="DEAD SPACE">DEAD SPACE</h1>
+      <h2 class="sub-title">SECTOR PROTOCOL // PROTOTIPO WEBGL</h2>
+      
+      <div class="lore-brief">
+        La nave USG Ishimura está en silencio. Los conductos de ventilación rezuman sangre y criaturas biomecánicas mutadas han tomado los pasillos. 
+        <br><br>
+        <strong class="dismember-warning">REGLA VITAL:</strong> Cortar sus extremidades es la única forma de frenarlos. Disparar al torso apenas les causa daño. Si les cortas ambos brazos, quedan desarmados.
+      </div>
+
+      <div class="controls-grid">
+        <div class="control-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Moverse</span></div>
+        <div class="control-item"><kbd>RATÓN</kbd><span>Mirar / Rotar cuerpo</span></div>
+        <div class="control-item"><kbd>CLIC DERECHO</kbd><span>Apuntar Cortador de Plasma</span></div>
+        <div class="control-item"><kbd>CLIC IZQ.</kbd><span>Disparar rayo de plasma</span></div>
+        <div class="control-item"><kbd>R</kbd><span>Recargar Cortador</span></div>
+        <div class="control-item"><kbd>SHIFT</kbd><span>Correr (Acelerar paso)</span></div>
+        <div class="control-item"><kbd>Q</kbd><span>Inyectar Botiquín (+50 Salud)</span></div>
+        <div class="control-item"><kbd>F</kbd><span>Alternar Linterna</span></div>
+        <div class="control-item"><kbd>ESC</kbd><span>Pausar / Liberar Cursor</span></div>
+      </div>
+
+      <div class="ui-guide">
+        <div class="guide-col">
+          <span class="guide-bullet blue"></span> <strong>Salud Diegética:</strong> Sensor luminoso 3D en la espalda del RIG. (Azul = Saludable, Naranja = Herido, Rojo parpadeante = Crítico).
+        </div>
+        <div class="guide-col">
+          <span class="guide-bullet cyan"></span> <strong>Munición Holográfica:</strong> Proyectada directamente junto al arma.
+        </div>
+      </div>
+
+      <button id="btn-start" class="cec-button">INICIAR MISIÓN</button>
+      <div class="audio-notice">* El audio procedural de Web Audio API se activará al hacer clic.</div>
+    </div>
+  </div>
+
+  <!-- Pause Screen -->
+  <div id="pause-screen" class="overlay-modal">
+    <div class="modal-card small">
+      <h2 class="pause-title">SISTEMA EN PAUSA</h2>
+      <p class="pause-text">Transmisión suspendida. Haz clic para reanudar el enlace neuronal.</p>
+      <button id="btn-resume" class="cec-button">REANUDAR</button>
+      <button id="btn-restart-pause" class="cec-button secondary">REINICIAR SECTOR</button>
+    </div>
+  </div>
+
+  <!-- Game Over Screen -->
+  <div id="death-screen" class="overlay-modal">
+    <div class="modal-card death-card">
+      <div class="alert-stripes"></div>
+      <h1 class="death-title">SEÑAL VITAL PERDIDA</h1>
+      <h2 class="death-subtitle">TRAJE RIG: OPERADOR FALLECIDO</h2>
+      <p class="death-desc">Has sucumbido ante los Necromorfos. Tus restos han sido asimilados por la nave.</p>
+      <button id="btn-restart-death" class="cec-button danger">REINTENTAR</button>
+    </div>
+  </div>
+
+  <!-- Victory Screen -->
+  <div id="victory-screen" class="overlay-modal">
+    <div class="modal-card victory-card">
+      <div class="green-scan"></div>
+      <h1 class="victory-title">CÁPSULA DE ESCAPE LANZADA</h1>
+      <h2 class="victory-subtitle">SECTOR PURGADO // HAS SOBREVIVIDO</h2>
+      <p class="victory-desc">Lograste alcanzar el módulo de salvamento y desacoplarte del infierno antes de que los mamparos colapsaran.</p>
+      <div class="stats-summary" id="victory-stats">
+        <div>NECROMORFOS DESMEMBRADOS: <span id="stat-kills" class="stat-num">0</span></div>
+        <div>EXTREMIDADES CORTADAS: <span id="stat-limbs" class="stat-num">0</span></div>
+      </div>
+      <button id="btn-restart-victory" class="cec-button victory">NUEVA INCURSIÓN</button>
+    </div>
+  </div>
+
+  <!-- Module Logic -->
+  <script type="module" src="game.js"></script>
+</body>
+</html>
