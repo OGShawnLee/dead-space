@@ -9,6 +9,7 @@ import { TextureFactory } from '../graphics/TextureFactory.js';
  * - Plasma Cutter weapon rig with floating holographic ammo
  * - Shoulder-mounted high-intensity flashlight
  * - Smooth WASD movement, sprint, aiming posture, health/damage/healing
+ * - Camera proximity occlusion fade (becomes transparent when camera is close)
  */
 export class Player {
   constructor(scene, soundSystem, startPos) {
@@ -28,6 +29,7 @@ export class Player {
     this.flashlightOn = true;
     this.stepTimer = 0;
     this.heartbeatTimer = 0;
+    this.currentOpacity = 1.0;
 
     // Movement speeds
     this.walkSpeed = 3.8;
@@ -180,7 +182,6 @@ export class Player {
 
     this.ammoCanvas = TextureFactory.createHoloAmmoCanvas(this.ammo, this.maxAmmo);
     this.ammoTexture = new THREE.CanvasTexture(this.ammoCanvas);
-    // Scaled up holographic projection for crystal-clear readability
     const holoGeo = new THREE.PlaneGeometry(0.52, 0.27);
     this.holoMaterial = new THREE.MeshBasicMaterial({
       map: this.ammoTexture,
@@ -276,6 +277,25 @@ export class Player {
       hpVal.textContent = `${Math.round(this.hp)}%`;
       hpVal.style.color = `#${activeHex.toString(16).padStart(6, '0')}`;
     }
+  }
+
+  setProximityOpacity(targetOpacity) {
+    if (Math.abs(this.currentOpacity - targetOpacity) < 0.015) return;
+    this.currentOpacity = targetOpacity;
+
+    const isTransparent = targetOpacity < 0.98;
+    this.suitGroup.traverse(child => {
+      if (child.isMesh && child.material) {
+        if (child === this.holoAmmoMesh) return;
+
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach(m => {
+          m.transparent = isTransparent;
+          m.opacity = targetOpacity;
+          m.needsUpdate = true;
+        });
+      }
+    });
   }
 
   updateHoloAmmo() {

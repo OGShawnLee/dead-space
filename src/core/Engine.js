@@ -22,6 +22,7 @@ export class DeadSpaceGame {
     this.statsLimbs = 0;
     this.isPaused = false;
     this.gameWon = false;
+    this.settingsPreviousModal = 'start';
 
     this.initThree();
     this.sound = new SoundSystem();
@@ -30,6 +31,9 @@ export class DeadSpaceGame {
 
     this.player = new Player(this.scene, this.sound, this.level.playerStart);
     this.cameraController = new ThirdPersonCamera(this.camera, this.player, this.scene, this.container);
+
+    this.settings = this.loadSettings();
+    this.cameraController.setSettings(this.settings);
 
     this.input = new InputManager({
       onToggleFlashlight: () => this.handleToggleFlashlight(),
@@ -46,6 +50,69 @@ export class DeadSpaceGame {
     this.clock = new THREE.Clock();
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
+  }
+
+  loadSettings() {
+    try {
+      const saved = localStorage.getItem('deadspace_settings');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.warn('Could not load settings from localStorage', e);
+    }
+    return {
+      invertY: false,
+      invertX: false,
+      sensitivity: 1.0
+    };
+  }
+
+  saveSettings(partial) {
+    this.settings = { ...this.settings, ...partial };
+    try {
+      localStorage.setItem('deadspace_settings', JSON.stringify(this.settings));
+    } catch (e) {
+      console.warn('Could not save settings to localStorage', e);
+    }
+    this.cameraController.setSettings(this.settings);
+  }
+
+  openSettings(fromModal) {
+    this.settingsPreviousModal = fromModal;
+    if (fromModal === 'start') {
+      const startModal = document.getElementById('start-screen');
+      if (startModal) startModal.classList.remove('active');
+    } else if (fromModal === 'pause') {
+      const pauseModal = document.getElementById('pause-screen');
+      if (pauseModal) pauseModal.classList.remove('active');
+    }
+
+    const chkY = document.getElementById('setting-invert-y');
+    const chkX = document.getElementById('setting-invert-x');
+    const rngSens = document.getElementById('setting-sensitivity');
+    const sensVal = document.getElementById('setting-sens-val');
+
+    if (chkY) chkY.checked = !!this.settings.invertY;
+    if (chkX) chkX.checked = !!this.settings.invertX;
+    if (rngSens) rngSens.value = this.settings.sensitivity || 1.0;
+    if (sensVal) sensVal.textContent = `${Number(this.settings.sensitivity || 1.0).toFixed(1)}x`;
+
+    const settingsModal = document.getElementById('settings-screen');
+    if (settingsModal) settingsModal.classList.add('active');
+  }
+
+  closeSettings() {
+    const settingsModal = document.getElementById('settings-screen');
+    if (settingsModal) settingsModal.classList.remove('active');
+
+    if (this.settingsPreviousModal === 'pause') {
+      const pauseModal = document.getElementById('pause-screen');
+      if (pauseModal) pauseModal.classList.add('active');
+    } else {
+      const startModal = document.getElementById('start-screen');
+      if (startModal) startModal.classList.add('active');
+    }
   }
 
   initThree() {
@@ -333,6 +400,12 @@ export class DeadSpaceGame {
   }
 
   togglePause() {
+    const settingsModal = document.getElementById('settings-screen');
+    if (settingsModal && settingsModal.classList.contains('active')) {
+      this.closeSettings();
+      return;
+    }
+
     this.isPaused = !this.isPaused;
     const modal = document.getElementById('pause-screen');
     if (this.isPaused) {
@@ -374,6 +447,45 @@ export class DeadSpaceGame {
     btnResume.addEventListener('click', () => {
       this.togglePause();
     });
+
+    const btnSettingsStart = document.getElementById('btn-settings-start');
+    if (btnSettingsStart) {
+      btnSettingsStart.addEventListener('click', () => this.openSettings('start'));
+    }
+
+    const btnSettingsPause = document.getElementById('btn-settings-pause');
+    if (btnSettingsPause) {
+      btnSettingsPause.addEventListener('click', () => this.openSettings('pause'));
+    }
+
+    const btnSaveSettings = document.getElementById('btn-save-settings');
+    if (btnSaveSettings) {
+      btnSaveSettings.addEventListener('click', () => this.closeSettings());
+    }
+
+    const chkY = document.getElementById('setting-invert-y');
+    if (chkY) {
+      chkY.addEventListener('change', (e) => {
+        this.saveSettings({ invertY: e.target.checked });
+      });
+    }
+
+    const chkX = document.getElementById('setting-invert-x');
+    if (chkX) {
+      chkX.addEventListener('change', (e) => {
+        this.saveSettings({ invertX: e.target.checked });
+      });
+    }
+
+    const rngSens = document.getElementById('setting-sensitivity');
+    const sensVal = document.getElementById('setting-sens-val');
+    if (rngSens) {
+      rngSens.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        if (sensVal) sensVal.textContent = `${val.toFixed(1)}x`;
+        this.saveSettings({ sensitivity: val });
+      });
+    }
 
     const reloadGame = () => window.location.reload();
     document.getElementById('btn-restart-pause').addEventListener('click', reloadGame);

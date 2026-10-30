@@ -7,6 +7,8 @@ const THREE = window.THREE;
  * - Dynamic aim zoom (transitions FOV from 70 to 50)
  * - Pointer Lock handling
  * - Collision detection against walls to prevent camera clipping
+ * - Configurable Axis Inversion (Invert Y / Invert X) and Sensitivity multiplier
+ * - Proximity-based character occlusion fade in tight corridors/corners
  */
 export class ThirdPersonCamera {
   constructor(camera, player, scene, domElement) {
@@ -27,8 +29,20 @@ export class ThirdPersonCamera {
     this.normalFov = 70;
     this.aimFov = 50;
 
+    // Configurable settings
+    this.invertY = false;
+    this.invertX = false;
+    this.sensitivityMultiplier = 1.0;
+
     this.isLocked = false;
     this.setupPointerLock();
+  }
+
+  setSettings(settings) {
+    if (!settings) return;
+    if (typeof settings.invertY === 'boolean') this.invertY = settings.invertY;
+    if (typeof settings.invertX === 'boolean') this.invertX = settings.invertX;
+    if (typeof settings.sensitivity === 'number') this.sensitivityMultiplier = settings.sensitivity;
   }
 
   setupPointerLock() {
@@ -45,9 +59,13 @@ export class ThirdPersonCamera {
     document.addEventListener('mousemove', (e) => {
       if (!this.isLocked || this.player.isDead) return;
 
-      const sensitivity = 0.0022;
-      this.yaw -= e.movementX * sensitivity;
-      this.pitch -= e.movementY * sensitivity;
+      const baseSensitivity = 0.0022;
+      const sensitivity = baseSensitivity * this.sensitivityMultiplier;
+      const dirX = this.invertX ? -1 : 1;
+      const dirY = this.invertY ? -1 : 1;
+
+      this.yaw -= e.movementX * sensitivity * dirX;
+      this.pitch -= e.movementY * sensitivity * dirY;
       this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, this.pitch));
 
       this.player.root.rotation.y = this.yaw;
@@ -89,6 +107,17 @@ export class ThirdPersonCamera {
     }
 
     this.camera.position.lerp(actualCamPos, dt * 16);
+
+    // Dynamic proximity occlusion fade for Isaac in tight corners
+    const distToHead = this.camera.position.distanceTo(headPos);
+    const minFadeDist = 0.65;
+    const maxFadeDist = 1.45;
+    const targetAlpha = THREE.MathUtils.clamp(
+      (distToHead - minFadeDist) / (maxFadeDist - minFadeDist),
+      0.15,
+      1.0
+    );
+    this.player.setProximityOpacity(targetAlpha);
 
     const lookTarget = headPos.clone().add(
       new THREE.Vector3(0, 0, 10)
