@@ -17,13 +17,27 @@ export class ThirdPersonCamera {
   pitch = 0;
   minPitch = -Math.PI / 3.0;
   maxPitch = Math.PI / 3.5;
+  // 1: Original 2008 | 2: Espaciosa | 3: Remake 2023 | 4: Táctica
+  static readonly PRESET: 1 | 2 | 3 | 4 = 4;
 
-  normalOffset = new Vector3(0.65, 1.6, -2.4);
-  aimOffset = new Vector3(0.5, 1.5, -1.35);
+  normalOffset = [
+    new Vector3(0.72, 0.15, -2.85), // Preset 1
+    new Vector3(0.80, 0.20, -3.20), // Preset 2
+    new Vector3(0.68, 0.08, -2.50), // Preset 3
+    new Vector3(0.75, 0.28, -2.90)  // Preset 4
+  ][ThirdPersonCamera.PRESET - 1];
+
+  aimOffset = [
+    new Vector3(0.85, 0.10, -1.65), // Preset 1
+    new Vector3(0.90, 0.12, -1.80), // Preset 2
+    new Vector3(0.82, 0.05, -1.45), // Preset 3
+    new Vector3(0.88, 0.18, -1.60)  // Preset 4
+  ][ThirdPersonCamera.PRESET - 1];
+
   currentOffset = this.normalOffset.clone();
 
-  normalFov = 70;
-  aimFov = 50;
+  normalFov = [65, 68, 66, 67][ThirdPersonCamera.PRESET - 1];
+  aimFov = [58, 60, 55, 57][ThirdPersonCamera.PRESET - 1];
 
   // Configurable settings
   invertY = false;
