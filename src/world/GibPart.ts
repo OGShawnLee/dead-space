@@ -1,23 +1,36 @@
-const THREE = window.THREE;
+import { Mesh, Vector3, type BufferGeometry, type Material, type Quaternion, type Scene } from 'three';
 
 /**
  * Gib Part
  * Physical debris representing severed limbs tumbling and bouncing on the floor.
  */
 export class GibPart {
-  constructor(scene, geometry, material, worldPos, worldQuat, initialVel) {
+  scene: Scene;
+  mesh: Mesh;
+  velocity: Vector3;
+  rotVel: Vector3;
+  life: number;
+
+  constructor(
+    scene: Scene,
+    geometry: BufferGeometry,
+    material: Material | Material[],
+    worldPos: Vector3,
+    worldQuat: Quaternion,
+    initialVel: Vector3
+  ) {
     this.scene = scene;
-    this.mesh = new THREE.Mesh(geometry, material);
+    this.mesh = new Mesh(geometry, material);
     this.mesh.position.copy(worldPos);
     this.mesh.quaternion.copy(worldQuat);
     this.scene.add(this.mesh);
 
-    this.velocity = initialVel.clone().add(new THREE.Vector3(
+    this.velocity = initialVel.clone().add(new Vector3(
       (Math.random() - 0.5) * 1.5,
       Math.random() * 2.0 + 1.2,
       (Math.random() - 0.5) * 1.5
     ));
-    this.rotVel = new THREE.Vector3(
+    this.rotVel = new Vector3(
       (Math.random() - 0.5) * 8,
       (Math.random() - 0.5) * 8,
       (Math.random() - 0.5) * 8
@@ -25,7 +38,7 @@ export class GibPart {
     this.life = 12.0;
   }
 
-  update(dt) {
+  update(dt: number): boolean {
     if (this.life <= 0) return false;
     this.life -= dt;
 

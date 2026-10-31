@@ -1,7 +1,21 @@
-const THREE = window.THREE;
-import { TextureFactory } from '../graphics/TextureFactory.js';
-import { GibPart } from '../world/GibPart.js';
-import { checkLineOfSight } from '../world/LineOfSight.js';
+import {
+  Group,
+  Mesh,
+  BoxGeometry,
+  ConeGeometry,
+  MeshStandardMaterial,
+  Vector3,
+  Quaternion,
+  Box3,
+  type Scene
+} from 'three';
+import { TextureFactory } from '../graphics/TextureFactory';
+import { GibPart } from '../world/GibPart';
+import { checkLineOfSight } from '../world/LineOfSight';
+import type { SoundSystem } from '../core/SoundSystem';
+import type { BloodParticleSystem } from '../graphics/BloodParticleSystem';
+import type { Player } from './Player';
+import type { LimbMesh, LimbType } from '../types';
 
 /**
  * Leaper Necromorph Entity
@@ -16,7 +30,60 @@ import { checkLineOfSight } from '../world/LineOfSight.js';
  * - Stasis Module temporal dilation (suspends mid-air leap and halves acrobatic velocities by 50%)
  */
 export class Leaper {
-  constructor(scene, soundSystem, spawnPos, gibList, bloodSys) {
+  scene: Scene;
+  sound: SoundSystem;
+  gibList: GibPart[];
+  bloodSys: BloodParticleSystem;
+
+  type: string;
+  hp: number;
+  isDead: boolean;
+  state: 'PATROL' | 'STALK' | 'WINDUP' | 'LUNGE' | 'ATTACK';
+  patrolTimer: number;
+  patrolDir: number;
+
+  baseSpeed: number;
+  speed: number;
+  attackRange: number;
+  attackCooldown: number;
+  bleedOutTimer: number;
+
+  // Lunge mechanics
+  isLeaping: boolean;
+  lungeCooldown: number;
+  lungeWindupTimer: number;
+  lungeVel: Vector3;
+
+  // Stasis Status
+  stasisTimer: number;
+  stasisFactor: number;
+
+  // Limb Tracking
+  hasHead: boolean;
+  hasTail: boolean;
+  hasArmL: boolean;
+  hasArmR: boolean;
+
+  root: Group;
+  matSkin: MeshStandardMaterial;
+  matBlade: MeshStandardMaterial;
+
+  torsoMesh!: Mesh;
+  headMesh!: Mesh;
+  armLGroup!: Group;
+  armLMesh!: Mesh;
+  armRGroup!: Group;
+  armRMesh!: Mesh;
+  tailGroup!: Group;
+  tailBladeMesh!: Mesh;
+
+  constructor(
+    scene: Scene,
+    soundSystem: SoundSystem,
+    spawnPos: Vector3,
+    gibList: GibPart[],
+    bloodSys: BloodParticleSystem
+  ) {
     this.scene = scene;
     this.sound = soundSystem;
     this.gibList = gibList;
@@ -39,7 +106,7 @@ export class Leaper {
     this.isLeaping = false;
     this.lungeCooldown = 0;
     this.lungeWindupTimer = 0;
-    this.lungeVel = new THREE.Vector3();
+    this.lungeVel = new Vector3();
 
     // Stasis Status
     this.stasisTimer = 0;
@@ -51,17 +118,17 @@ export class Leaper {
     this.hasArmL = true;
     this.hasArmR = true;
 
-    this.root = new THREE.Group();
+    this.root = new Group();
     this.root.position.copy(spawnPos);
     this.scene.add(this.root);
 
-    this.matSkin = new THREE.MeshStandardMaterial({
+    this.matSkin = new MeshStandardMaterial({
       map: TextureFactory.createNecroSkin(),
       roughness: 0.65,
       metalness: 0.2
     });
 
-    this.matBlade = new THREE.MeshStandardMaterial({
+    this.matBlade = new MeshStandardMaterial({
       color: 0x2d3748,
       roughness: 0.25,
       metalness: 0.85
@@ -70,45 +137,46 @@ export class Leaper {
     this.buildBody();
   }
 
-  applyStasis(duration = 5.0, factor = 0.5) {
+  applyStasis(duration = 5.0, factor = 0.5): void {
     this.stasisTimer = Math.max(this.stasisTimer, duration);
     this.stasisFactor = factor;
   }
 
-  tagLimb(mesh, type, hp) {
-    mesh.isLimb = true;
-    mesh.limbType = type;
-    mesh.limbHp = hp;
-    mesh.enemyRef = this;
+  tagLimb(mesh: Mesh, type: LimbType, hp: number): void {
+    const limb = mesh as LimbMesh;
+    limb.isLimb = true;
+    limb.limbType = type;
+    limb.limbHp = hp;
+    limb.enemyRef = this;
   }
 
-  buildBody() {
+  buildBody(): void {
     // 1. Low Crouched Torso (Height 0.55m off the ground)
-    const torsoGeo = new THREE.BoxGeometry(0.55, 0.45, 0.7);
-    this.torsoMesh = new THREE.Mesh(torsoGeo, this.matSkin);
+    const torsoGeo = new BoxGeometry(0.55, 0.45, 0.7);
+    this.torsoMesh = new Mesh(torsoGeo, this.matSkin);
     this.torsoMesh.position.y = 0.55;
     this.torsoMesh.rotation.x = -0.15; // Low angled profile
     this.tagLimb(this.torsoMesh, 'torso', 999);
     this.root.add(this.torsoMesh);
 
     // 2. Feral Head (HP: 25)
-    const headGeo = new THREE.BoxGeometry(0.3, 0.3, 0.35);
-    this.headMesh = new THREE.Mesh(headGeo, this.matSkin);
+    const headGeo = new BoxGeometry(0.3, 0.3, 0.35);
+    this.headMesh = new Mesh(headGeo, this.matSkin);
     this.headMesh.position.set(0, 0.22, 0.45);
     this.tagLimb(this.headMesh, 'head', 25);
     this.torsoMesh.add(this.headMesh);
 
     // Jagged bone jaw
-    const jawGeo = new THREE.BoxGeometry(0.24, 0.12, 0.24);
-    const jawMesh = new THREE.Mesh(jawGeo, this.matBlade);
+    const jawGeo = new BoxGeometry(0.24, 0.12, 0.24);
+    const jawMesh = new Mesh(jawGeo, this.matBlade);
     jawMesh.position.set(0, -0.12, 0.08);
     this.headMesh.add(jawMesh);
 
     // 3. Left Crawling Arm (HP: 25)
-    this.armLGroup = new THREE.Group();
+    this.armLGroup = new Group();
     this.armLGroup.position.set(-0.38, 0.1, 0.25);
-    const armGeo = new THREE.BoxGeometry(0.18, 0.6, 0.18);
-    this.armLMesh = new THREE.Mesh(armGeo, this.matSkin);
+    const armGeo = new BoxGeometry(0.18, 0.6, 0.18);
+    this.armLMesh = new Mesh(armGeo, this.matSkin);
     this.armLMesh.position.set(0, -0.25, 0);
     this.armLMesh.rotation.z = -0.3;
     this.armLGroup.add(this.armLMesh);
@@ -116,9 +184,9 @@ export class Leaper {
     this.torsoMesh.add(this.armLGroup);
 
     // 4. Right Crawling Arm (HP: 25)
-    this.armRGroup = new THREE.Group();
+    this.armRGroup = new Group();
     this.armRGroup.position.set(0.38, 0.1, 0.25);
-    const armRMesh = new THREE.Mesh(armGeo, this.matSkin);
+    const armRMesh = new Mesh(armGeo, this.matSkin);
     armRMesh.position.set(0, -0.25, 0);
     armRMesh.rotation.z = 0.3;
     this.armRGroup.add(armRMesh);
@@ -126,22 +194,22 @@ export class Leaper {
     this.torsoMesh.add(this.armRGroup);
 
     // 5. Giant Barbed Spinal Tail (HP: 25 - Severing eliminates leaping!)
-    this.tailGroup = new THREE.Group();
+    this.tailGroup = new Group();
     this.tailGroup.position.set(0, 0.15, -0.35);
 
-    const tailSeg1 = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.5), this.matSkin);
+    const tailSeg1 = new Mesh(new BoxGeometry(0.2, 0.2, 0.5), this.matSkin);
     tailSeg1.position.set(0, 0.2, -0.25);
     tailSeg1.rotation.x = 0.5;
     this.tailGroup.add(tailSeg1);
 
-    const tailSeg2 = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, 0.5), this.matSkin);
+    const tailSeg2 = new Mesh(new BoxGeometry(0.16, 0.16, 0.5), this.matSkin);
     tailSeg2.position.set(0, 0.5, -0.45);
     tailSeg2.rotation.x = 0.9;
     this.tailGroup.add(tailSeg2);
 
-    const bladeGeo = new THREE.ConeGeometry(0.14, 0.85, 4);
+    const bladeGeo = new ConeGeometry(0.14, 0.85, 4);
     bladeGeo.rotateX(-Math.PI / 2.3);
-    this.tailBladeMesh = new THREE.Mesh(bladeGeo, this.matBlade);
+    this.tailBladeMesh = new Mesh(bladeGeo, this.matBlade);
     this.tailBladeMesh.position.set(0, 0.85, -0.35);
     this.tailGroup.add(this.tailBladeMesh);
 
@@ -151,11 +219,11 @@ export class Leaper {
     this.torsoMesh.add(this.tailGroup);
   }
 
-  severLimb(limbType, hitNormal) {
+  severLimb(limbType: LimbType, hitNormal?: Vector3): void {
     if (this.isDead) return;
 
-    let targetMesh = null;
-    let parentGroup = null;
+    let targetMesh: any = null;
+    let parentGroup: any = null;
 
     if (limbType === 'head' && this.hasHead) {
       this.hasHead = false;
@@ -187,20 +255,20 @@ export class Leaper {
     }
 
     if (targetMesh && parentGroup) {
-      const worldPos = new THREE.Vector3();
-      const worldQuat = new THREE.Quaternion();
+      const worldPos = new Vector3();
+      const worldQuat = new Quaternion();
       targetMesh.getWorldPosition(worldPos);
       targetMesh.getWorldQuaternion(worldQuat);
 
       parentGroup.remove(targetMesh);
 
-      const gibGeo = targetMesh instanceof THREE.Group
-        ? (limbType === 'tail' ? new THREE.BoxGeometry(0.2, 0.8, 0.2) : new THREE.BoxGeometry(0.2, 0.5, 0.2))
+      const gibGeo = targetMesh instanceof Group
+        ? (limbType === 'tail' ? new BoxGeometry(0.2, 0.8, 0.2) : new BoxGeometry(0.2, 0.5, 0.2))
         : targetMesh.geometry.clone();
       const gibMat = limbType === 'tail' ? this.matBlade : this.matSkin;
-      this.gibList.push(new GibPart(this.scene, gibGeo, gibMat, worldPos, worldQuat, hitNormal || new THREE.Vector3(0, 1, 0)));
+      this.gibList.push(new GibPart(this.scene, gibGeo, gibMat, worldPos, worldQuat, hitNormal || new Vector3(0, 1, 0)));
 
-      this.bloodSys.spawnSplatter(worldPos, hitNormal || new THREE.Vector3(0, 1, 0), 28);
+      this.bloodSys.spawnSplatter(worldPos, hitNormal || new Vector3(0, 1, 0), 28);
 
       // Bleed out if disarmed of arms or tail + arm
       if (!this.hasArmL && !this.hasArmR) {
@@ -216,14 +284,14 @@ export class Leaper {
     }
   }
 
-  takeTorsoDamage(amount, hitPos, hitNormal) {
+  takeTorsoDamage(amount: number, hitPos: Vector3, hitNormal: Vector3): void {
     if (this.isDead) return;
     this.hp -= amount;
     this.bloodSys.spawnSplatter(hitPos, hitNormal, 12);
     if (this.hp <= 0) this.die();
   }
 
-  die() {
+  die(): void {
     if (this.isDead) return;
     this.isDead = true;
     this.isLeaping = false;
@@ -236,7 +304,7 @@ export class Leaper {
     }
   }
 
-  alertNearby(pos) {
+  alertNearby(pos: Vector3): void {
     if (this.isDead || this.state === 'STALK' || this.isLeaping) return;
     const dist = this.root.position.distanceTo(pos);
     if (dist < 14.0) {
@@ -245,7 +313,7 @@ export class Leaper {
     }
   }
 
-  update(dt, player, colliders) {
+  update(dt: number, player: Player, colliders: Box3[]): void {
     if (this.isDead) return;
 
     let effectiveDt = dt;
@@ -253,7 +321,7 @@ export class Leaper {
       this.stasisTimer -= dt;
       effectiveDt = dt * this.stasisFactor;
       if (Math.random() < 0.25 && this.bloodSys) {
-        const sparkPos = this.root.position.clone().add(new THREE.Vector3(
+        const sparkPos = this.root.position.clone().add(new Vector3(
           (Math.random() - 0.5) * 0.7,
           Math.random() * 0.9,
           (Math.random() - 0.5) * 0.7
@@ -286,9 +354,9 @@ export class Leaper {
       const nextPos = this.root.position.clone().add(moveStep);
 
       // Check wall intersection during mid-air trajectory
-      const leapBox = new THREE.Box3(
-        new THREE.Vector3(nextPos.x - 0.45, Math.max(0.05, nextPos.y), nextPos.z - 0.45),
-        new THREE.Vector3(nextPos.x + 0.45, nextPos.y + 0.8, nextPos.z + 0.45)
+      const leapBox = new Box3(
+        new Vector3(nextPos.x - 0.45, Math.max(0.05, nextPos.y), nextPos.z - 0.45),
+        new Vector3(nextPos.x + 0.45, nextPos.y + 0.8, nextPos.z + 0.45)
       );
 
       let wallHit = false;
@@ -308,7 +376,7 @@ export class Leaper {
         this.root.position.y = 0.05;
         if (this.torsoMesh) this.torsoMesh.rotation.x = -0.15;
 
-        const stepBack = new THREE.Vector3(
+        const stepBack = new Vector3(
           -Math.sin(this.root.rotation.y),
           0,
           -Math.cos(this.root.rotation.y)
@@ -339,9 +407,9 @@ export class Leaper {
       return;
     }
 
-    const enemyEyePos = this.root.position.clone().add(new THREE.Vector3(0, 0.6, 0));
-    const playerTorsoPos = player.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
-    const toPlayer = new THREE.Vector3().subVectors(player.root.position, this.root.position);
+    const enemyEyePos = this.root.position.clone().add(new Vector3(0, 0.6, 0));
+    const playerTorsoPos = player.root.position.clone().add(new Vector3(0, 1.2, 0));
+    const toPlayer = new Vector3().subVectors(player.root.position, this.root.position);
     const dist = toPlayer.length();
 
     const hasLoS = checkLineOfSight(enemyEyePos, playerTorsoPos, colliders);
@@ -357,12 +425,12 @@ export class Leaper {
           this.patrolDir = Math.random() * Math.PI * 2;
         }
 
-        const moveVec = new THREE.Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar(1.2 * effectiveDt);
+        const moveVec = new Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar(1.2 * effectiveDt);
         const nextPos = this.root.position.clone().add(moveVec);
 
-        const testBox = new THREE.Box3(
-          new THREE.Vector3(nextPos.x - 0.45, 0.05, nextPos.z - 0.45),
-          new THREE.Vector3(nextPos.x + 0.45, 1.2, nextPos.z + 0.45)
+        const testBox = new Box3(
+          new Vector3(nextPos.x - 0.45, 0.05, nextPos.z - 0.45),
+          new Vector3(nextPos.x + 0.45, 1.2, nextPos.z + 0.45)
         );
 
         let blocked = false;
@@ -405,9 +473,9 @@ export class Leaper {
       const moveStep = toPlayer.clone().multiplyScalar(this.speed * effectiveDt);
       const nextPos = this.root.position.clone().add(moveStep);
 
-      const testBox = new THREE.Box3(
-        new THREE.Vector3(nextPos.x - 0.5, 0.05, nextPos.z - 0.5),
-        new THREE.Vector3(nextPos.x + 0.5, 1.2, nextPos.z + 0.5)
+      const testBox = new Box3(
+        new Vector3(nextPos.x - 0.5, 0.05, nextPos.z - 0.5),
+        new Vector3(nextPos.x + 0.5, 1.2, nextPos.z + 0.5)
       );
 
       let blocked = false;
@@ -452,7 +520,7 @@ export class Leaper {
     }
   }
 
-  attack(player) {
+  attack(player: Player): void {
     if (!this.hasArmL && !this.hasArmR && !this.hasTail) {
       return;
     }

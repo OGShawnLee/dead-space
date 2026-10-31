@@ -1,5 +1,27 @@
-const THREE = window.THREE;
-import { TextureFactory } from '../graphics/TextureFactory.js';
+import {
+  Group,
+  Mesh,
+  BoxGeometry,
+  CylinderGeometry,
+  PlaneGeometry,
+  Line,
+  BufferGeometry,
+  LineBasicMaterial,
+  SpotLight,
+  PointLight,
+  Object3D,
+  MeshBasicMaterial,
+  MeshStandardMaterial,
+  CanvasTexture,
+  LinearFilter,
+  DoubleSide,
+  Vector3,
+  Box3,
+  type Scene
+} from 'three';
+import { TextureFactory } from '../graphics/TextureFactory';
+import type { SoundSystem } from '../core/SoundSystem';
+import type { InputState } from '../types';
 
 /**
  * Isaac Clarke Player Entity
@@ -13,7 +35,59 @@ import { TextureFactory } from '../graphics/TextureFactory.js';
  * - Camera proximity occlusion fade (becomes transparent when camera is close)
  */
 export class Player {
-  constructor(scene, soundSystem, startPos) {
+  scene: Scene;
+  sound: SoundSystem;
+
+  maxHp: number;
+  hp: number;
+  medkits: number;
+  ammo: number;
+  maxAmmo: number;
+  reserveAmmo: number;
+  isDead: boolean;
+
+  // Stasis Module (Suit Level 1: 3 charges, 50% slow)
+  stasisCharges: number;
+  maxStasisCharges: number;
+  stasisCooldown: number;
+  stasisAnimTimer: number;
+
+  isAiming: boolean;
+  isSprinting: boolean;
+  flashlightOn: boolean;
+  stepTimer: number;
+  heartbeatTimer: number;
+  currentOpacity: number;
+
+  // Movement speeds
+  walkSpeed: number;
+  sprintSpeed: number;
+  aimSpeed: number;
+
+  root: Group;
+  radius: number;
+
+  suitGroup!: Group;
+  torsoMesh!: Mesh<BoxGeometry, MeshStandardMaterial>;
+  rigSegments!: Mesh<BoxGeometry, MeshBasicMaterial>[];
+  stasisRingMat!: MeshBasicMaterial;
+  stasisRing!: Mesh<CylinderGeometry, MeshBasicMaterial>;
+  rigBackLight!: PointLight;
+  legL!: Mesh<BoxGeometry, MeshStandardMaterial>;
+  legR!: Mesh<BoxGeometry, MeshStandardMaterial>;
+  armL!: Mesh<BoxGeometry, MeshStandardMaterial>;
+  armR!: Mesh<BoxGeometry, MeshStandardMaterial>;
+
+  weaponGroup!: Group;
+  ammoCanvas!: HTMLCanvasElement;
+  ammoTexture!: CanvasTexture;
+  holoScreen!: Mesh<PlaneGeometry, MeshBasicMaterial>;
+  laserLine!: Line<BufferGeometry, LineBasicMaterial>;
+
+  spotLight!: SpotLight;
+  spotTarget!: Object3D;
+
+  constructor(scene: Scene, soundSystem: SoundSystem, startPos: Vector3) {
     this.scene = scene;
     this.sound = soundSystem;
 
@@ -43,7 +117,7 @@ export class Player {
     this.sprintSpeed = 6.2;
     this.aimSpeed = 2.2;
 
-    this.root = new THREE.Group();
+    this.root = new Group();
     this.root.position.copy(startPos);
     this.scene.add(this.root);
     this.radius = 0.5;
@@ -55,48 +129,48 @@ export class Player {
     this.updateStasisMeter();
   }
 
-  buildSuitMesh() {
-    this.suitGroup = new THREE.Group();
+  buildSuitMesh(): void {
+    this.suitGroup = new Group();
     this.root.add(this.suitGroup);
 
-    const suitMat = new THREE.MeshStandardMaterial({
+    const suitMat = new MeshStandardMaterial({
       map: TextureFactory.createSuitTexture(),
       roughness: 0.45,
       metalness: 0.65
     });
 
-    const darkMetalMat = new THREE.MeshStandardMaterial({
+    const darkMetalMat = new MeshStandardMaterial({
       color: 0x1f242b,
       roughness: 0.7,
       metalness: 0.8
     });
 
     // 1. Torso
-    const torsoGeo = new THREE.BoxGeometry(0.65, 0.75, 0.4);
-    this.torsoMesh = new THREE.Mesh(torsoGeo, suitMat);
+    const torsoGeo = new BoxGeometry(0.65, 0.75, 0.4);
+    this.torsoMesh = new Mesh(torsoGeo, suitMat);
     this.torsoMesh.position.y = 1.15;
     this.torsoMesh.castShadow = true;
     this.suitGroup.add(this.torsoMesh);
 
     // Chest armor plate
-    const chestPlate = new THREE.Mesh(
-      new THREE.BoxGeometry(0.55, 0.4, 0.1),
+    const chestPlate = new Mesh(
+      new BoxGeometry(0.55, 0.4, 0.1),
       darkMetalMat
     );
     chestPlate.position.set(0, 1.25, 0.22);
     this.suitGroup.add(chestPlate);
 
     // 2. Helmet
-    const helmetGeo = new THREE.BoxGeometry(0.4, 0.42, 0.42);
-    const helmet = new THREE.Mesh(helmetGeo, suitMat);
+    const helmetGeo = new BoxGeometry(0.4, 0.42, 0.42);
+    const helmet = new Mesh(helmetGeo, suitMat);
     helmet.position.set(0, 1.72, 0);
     this.suitGroup.add(helmet);
 
     // Glowing cyan visor slits
-    const visorMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    const visorMat = new MeshBasicMaterial({ color: 0x00f0ff });
     for (let i = 0; i < 3; i++) {
-      const slit = new THREE.Mesh(
-        new THREE.BoxGeometry(0.24, 0.025, 0.05),
+      const slit = new Mesh(
+        new BoxGeometry(0.24, 0.025, 0.05),
         visorMat
       );
       slit.position.set(0, 1.74 - i * 0.05, 0.215);
@@ -104,13 +178,13 @@ export class Player {
     }
 
     // 3. PROMINENT 3D DEAD SPACE RIG SPINAL ASSEMBLY
-    const pack = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.68, 0.12), darkMetalMat);
+    const pack = new Mesh(new BoxGeometry(0.38, 0.68, 0.12), darkMetalMat);
     pack.position.set(0, 1.15, -0.26);
     this.suitGroup.add(pack);
 
     // Spine mounting bracket
-    const spineBracket = new THREE.Mesh(
-      new THREE.BoxGeometry(0.14, 0.62, 0.06),
+    const spineBracket = new Mesh(
+      new BoxGeometry(0.14, 0.62, 0.06),
       darkMetalMat
     );
     spineBracket.position.set(0, 1.15, -0.32);
@@ -124,20 +198,20 @@ export class Player {
     const startY = 0.88;
 
     for (let i = 0; i < numSegments; i++) {
-      const segGeo = new THREE.BoxGeometry(0.09, segH, 0.12);
-      const segMat = new THREE.MeshBasicMaterial({
+      const segGeo = new BoxGeometry(0.09, segH, 0.12);
+      const segMat = new MeshBasicMaterial({
         color: 0x00f0ff
       });
-      const segMesh = new THREE.Mesh(segGeo, segMat);
+      const segMesh = new Mesh(segGeo, segMat);
       segMesh.position.set(0, startY + i * (segH + segGap), -0.36);
       this.suitGroup.add(segMesh);
       this.rigSegments.push(segMesh);
     }
 
     // Circular Stasis Meter on right shoulder blade
-    this.stasisRingMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
-    this.stasisRing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.065, 0.065, 0.04, 16),
+    this.stasisRingMat = new MeshBasicMaterial({ color: 0x00f0ff });
+    this.stasisRing = new Mesh(
+      new CylinderGeometry(0.065, 0.065, 0.04, 16),
       this.stasisRingMat
     );
     this.stasisRing.rotation.x = Math.PI / 2;
@@ -145,38 +219,38 @@ export class Player {
     this.suitGroup.add(this.stasisRing);
 
     // Dedicated Neon Back Light for the RIG Spine Aura
-    this.rigBackLight = new THREE.PointLight(0x00f0ff, 1.5, 2.5);
+    this.rigBackLight = new PointLight(0x00f0ff, 1.5, 2.5);
     this.rigBackLight.position.set(0, 1.15, -0.45);
     this.suitGroup.add(this.rigBackLight);
 
     // 4. Limbs
-    const legGeo = new THREE.BoxGeometry(0.24, 0.75, 0.24);
-    this.legL = new THREE.Mesh(legGeo, suitMat);
+    const legGeo = new BoxGeometry(0.24, 0.75, 0.24);
+    this.legL = new Mesh(legGeo, suitMat);
     this.legL.position.set(-0.2, 0.4, 0);
     this.suitGroup.add(this.legL);
 
-    this.legR = new THREE.Mesh(legGeo, suitMat);
+    this.legR = new Mesh(legGeo, suitMat);
     this.legR.position.set(0.2, 0.4, 0);
     this.suitGroup.add(this.legR);
 
-    const armGeo = new THREE.BoxGeometry(0.2, 0.65, 0.2);
-    this.armL = new THREE.Mesh(armGeo, suitMat);
+    const armGeo = new BoxGeometry(0.2, 0.65, 0.2);
+    this.armL = new Mesh(armGeo, suitMat);
     this.armL.position.set(-0.45, 1.15, 0);
     this.suitGroup.add(this.armL);
 
-    this.armR = new THREE.Mesh(armGeo, suitMat);
+    this.armR = new Mesh(armGeo, suitMat);
     this.armR.position.set(0.45, 1.15, 0);
     this.suitGroup.add(this.armR);
   }
 
-  setProximityOpacity(targetOpacity) {
+  setProximityOpacity(targetOpacity: number): void {
     if (Math.abs(this.currentOpacity - targetOpacity) < 0.01) return;
     this.currentOpacity = targetOpacity;
 
-    const applyOpacity = (obj) => {
+    const applyOpacity = (obj: any): void => {
       if (obj.material) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-        mats.forEach(mat => {
+        mats.forEach((mat: any) => {
           mat.transparent = targetOpacity < 0.99;
           mat.opacity = targetOpacity;
           mat.needsUpdate = true;
@@ -188,22 +262,22 @@ export class Player {
     if (this.weaponGroup) this.weaponGroup.traverse(applyOpacity);
   }
 
-  buildPlasmaCutter() {
-    this.weaponGroup = new THREE.Group();
+  buildPlasmaCutter(): void {
+    this.weaponGroup = new Group();
     this.weaponGroup.position.set(0.48, 1.05, 0.35);
 
-    const metalMat = new THREE.MeshStandardMaterial({
+    const metalMat = new MeshStandardMaterial({
       color: 0x333b45,
       metalness: 0.8,
       roughness: 0.3
     });
 
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.16, 0.45), metalMat);
+    const body = new Mesh(new BoxGeometry(0.12, 0.16, 0.45), metalMat);
     this.weaponGroup.add(body);
 
-    const emitter = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.05, 0.12, 8),
-      new THREE.MeshBasicMaterial({ color: 0x00e5ff })
+    const emitter = new Mesh(
+      new CylinderGeometry(0.05, 0.05, 0.12, 8),
+      new MeshBasicMaterial({ color: 0x00e5ff })
     );
     emitter.rotation.x = Math.PI / 2;
     emitter.position.set(0, 0, 0.24);
@@ -211,40 +285,40 @@ export class Player {
 
     // Floating Holographic Ammo Counter Screen (Dead Space diegetic UI)
     this.ammoCanvas = TextureFactory.createHoloAmmoCanvas(this.ammo, this.maxAmmo);
-    this.ammoTexture = new THREE.CanvasTexture(this.ammoCanvas);
-    this.ammoTexture.magFilter = THREE.LinearFilter;
-    this.ammoTexture.minFilter = THREE.LinearFilter;
+    this.ammoTexture = new CanvasTexture(this.ammoCanvas);
+    this.ammoTexture.magFilter = LinearFilter;
+    this.ammoTexture.minFilter = LinearFilter;
 
-    const holoScreenGeo = new THREE.PlaneGeometry(0.26, 0.13);
-    const holoScreenMat = new THREE.MeshBasicMaterial({
+    const holoScreenGeo = new PlaneGeometry(0.26, 0.13);
+    const holoScreenMat = new MeshBasicMaterial({
       map: this.ammoTexture,
       transparent: true,
       opacity: 0.95,
-      side: THREE.DoubleSide
+      side: DoubleSide
     });
-    this.holoScreen = new THREE.Mesh(holoScreenGeo, holoScreenMat);
+    this.holoScreen = new Mesh(holoScreenGeo, holoScreenMat);
     this.holoScreen.position.set(0.14, 0.16, -0.06);
     this.holoScreen.rotation.y = -Math.PI / 3.8;
     this.holoScreen.rotation.x = -Math.PI / 12;
     this.weaponGroup.add(this.holoScreen);
 
     // Subtle cyan holographic glow light
-    const holoLight = new THREE.PointLight(0x00e5ff, 0.4, 0.8);
+    const holoLight = new PointLight(0x00e5ff, 0.4, 0.8);
     holoLight.position.copy(this.holoScreen.position);
     this.weaponGroup.add(holoLight);
 
     // 3 Aiming Lasers
-    const laserMat = new THREE.LineBasicMaterial({
+    const laserMat = new LineBasicMaterial({
       color: 0x00f0ff,
       linewidth: 2,
       transparent: true,
       opacity: 0.85
     });
-    const laserGeom = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0),
-      new THREE.Vector3(0, 0, 25)
+    const laserGeom = new BufferGeometry().setFromPoints([
+      new Vector3(0, 0, 0),
+      new Vector3(0, 0, 25)
     ]);
-    this.laserLine = new THREE.Line(laserGeom, laserMat);
+    this.laserLine = new Line(laserGeom, laserMat);
     this.laserLine.position.set(0, 0, 0.24);
     this.laserLine.visible = false;
     this.weaponGroup.add(this.laserLine);
@@ -252,8 +326,8 @@ export class Player {
     this.suitGroup.add(this.weaponGroup);
   }
 
-  buildFlashlight() {
-    this.spotLight = new THREE.SpotLight(0xd4e9ff, 4.5, 30, Math.PI / 6, 0.35, 1.2);
+  buildFlashlight(): void {
+    this.spotLight = new SpotLight(0xd4e9ff, 4.5, 30, Math.PI / 6, 0.35, 1.2);
     this.spotLight.position.set(0.28, 1.62, 0.15);
     this.spotLight.castShadow = true;
     this.spotLight.shadow.mapSize.width = 1024;
@@ -261,7 +335,7 @@ export class Player {
     this.spotLight.shadow.camera.near = 0.5;
     this.spotLight.shadow.camera.far = 30;
 
-    this.spotTarget = new THREE.Object3D();
+    this.spotTarget = new Object3D();
     this.spotTarget.position.set(0.28, 1.62, 10);
     this.root.add(this.spotTarget);
     this.spotLight.target = this.spotTarget;
@@ -269,14 +343,14 @@ export class Player {
     this.suitGroup.add(this.spotLight);
   }
 
-  toggleFlashlight() {
+  toggleFlashlight(): boolean {
     this.flashlightOn = !this.flashlightOn;
     this.spotLight.visible = this.flashlightOn;
     this.sound.playFlashlight();
     return this.flashlightOn;
   }
 
-  updateRigSpine() {
+  updateRigSpine(): void {
     const healthFrac = this.hp / this.maxHp;
     const activeSegments = Math.ceil(healthFrac * this.rigSegments.length);
 
@@ -315,7 +389,7 @@ export class Player {
     if (hpNumEl) hpNumEl.textContent = `${Math.round(this.hp)}%`;
   }
 
-  updateStasisMeter() {
+  updateStasisMeter(): void {
     if (!this.stasisRingMat) return;
     if (this.stasisCharges >= 3) {
       this.stasisRingMat.color.setHex(0x00f0ff); // Full 3 charges: Brilliant cyan
@@ -328,11 +402,11 @@ export class Player {
     }
   }
 
-  canFireStasis() {
+  canFireStasis(): boolean {
     return this.isAiming && !this.isDead && this.stasisCharges > 0 && this.stasisCooldown <= 0;
   }
 
-  fireStasis() {
+  fireStasis(): boolean {
     if (!this.isAiming || this.isDead) return false;
     if (this.stasisCooldown > 0) return false;
 
@@ -349,20 +423,22 @@ export class Player {
     return true;
   }
 
-  rechargeStasis(amount = 3) {
+  rechargeStasis(amount = 3): void {
     this.stasisCharges = Math.min(this.maxStasisCharges, this.stasisCharges + amount);
     this.updateStasisMeter();
   }
 
-  updateHoloAmmo() {
+  updateHoloAmmo(): void {
     const newCanvas = TextureFactory.createHoloAmmoCanvas(this.ammo, this.maxAmmo);
     const ctx = this.ammoCanvas.getContext('2d');
-    ctx.clearRect(0, 0, 256, 128);
-    ctx.drawImage(newCanvas, 0, 0);
+    if (ctx) {
+      ctx.clearRect(0, 0, 256, 128);
+      ctx.drawImage(newCanvas, 0, 0);
+    }
     this.ammoTexture.needsUpdate = true;
   }
 
-  takeDamage(amount) {
+  takeDamage(amount: number): void {
     if (this.isDead) return;
     this.hp = Math.max(0, this.hp - amount);
     this.updateRigSpine();
@@ -381,7 +457,7 @@ export class Player {
     }
   }
 
-  heal() {
+  heal(): boolean {
     if (this.medkits <= 0 || this.hp >= this.maxHp || this.isDead) return false;
     this.medkits--;
     this.hp = Math.min(this.maxHp, this.hp + 50);
@@ -390,7 +466,7 @@ export class Player {
     return true;
   }
 
-  reload() {
+  reload(): boolean {
     if (this.ammo >= this.maxAmmo || this.reserveAmmo <= 0) return false;
     const needed = this.maxAmmo - this.ammo;
     const toLoad = Math.min(needed, this.reserveAmmo);
@@ -401,7 +477,7 @@ export class Player {
     return true;
   }
 
-  update(dt, input, colliders) {
+  update(dt: number, input: InputState, colliders: Box3[]): void {
     if (this.isDead) return;
 
     this.isAiming = input.aiming;
@@ -441,7 +517,7 @@ export class Player {
     if (this.isAiming) speed = this.aimSpeed;
     else if (input.sprint) speed = this.sprintSpeed;
 
-    const moveDir = new THREE.Vector3();
+    const moveDir = new Vector3();
     if (input.forward) moveDir.z += 1;
     if (input.backward) moveDir.z -= 1;
     if (input.strafeLeft) moveDir.x += 1;
@@ -451,10 +527,10 @@ export class Player {
     if (isMoving) {
       moveDir.normalize();
 
-      const forward = new THREE.Vector3(0, 0, 1).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.root.rotation.y);
-      const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.root.rotation.y);
+      const forward = new Vector3(0, 0, 1).applyAxisAngle(new Vector3(0, 1, 0), this.root.rotation.y);
+      const right = new Vector3(1, 0, 0).applyAxisAngle(new Vector3(0, 1, 0), this.root.rotation.y);
 
-      const deltaPos = new THREE.Vector3()
+      const deltaPos = new Vector3()
         .addScaledVector(forward, moveDir.z)
         .addScaledVector(right, moveDir.x)
         .multiplyScalar(speed * dt);
@@ -462,9 +538,9 @@ export class Player {
       const nextX = this.root.position.x + deltaPos.x;
       const nextZ = this.root.position.z + deltaPos.z;
 
-      const testBoxX = new THREE.Box3(
-        new THREE.Vector3(nextX - this.radius, 0.1, this.root.position.z - this.radius),
-        new THREE.Vector3(nextX + this.radius, 1.8, this.root.position.z + this.radius)
+      const testBoxX = new Box3(
+        new Vector3(nextX - this.radius, 0.1, this.root.position.z - this.radius),
+        new Vector3(nextX + this.radius, 1.8, this.root.position.z + this.radius)
       );
       let hitX = false;
       for (let i = 0; i < colliders.length; i++) {
@@ -472,9 +548,9 @@ export class Player {
       }
       if (!hitX) this.root.position.x = nextX;
 
-      const testBoxZ = new THREE.Box3(
-        new THREE.Vector3(this.root.position.x - this.radius, 0.1, nextZ - this.radius),
-        new THREE.Vector3(this.root.position.x + this.radius, 1.8, nextZ + this.radius)
+      const testBoxZ = new Box3(
+        new Vector3(this.root.position.x - this.radius, 0.1, nextZ - this.radius),
+        new Vector3(this.root.position.x + this.radius, 1.8, nextZ + this.radius)
       );
       let hitZ = false;
       for (let i = 0; i < colliders.length; i++) {

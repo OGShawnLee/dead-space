@@ -1,21 +1,84 @@
-const THREE = window.THREE;
-import { SoundSystem } from './SoundSystem.js';
-import { InputManager } from './InputManager.js';
-import { ShipLevel } from '../world/ShipLevel.js';
-import { BloodParticleSystem } from '../graphics/BloodParticleSystem.js';
-import { Player } from '../entities/Player.js';
-import { Necromorph } from '../entities/Necromorph.js';
-import { Exploder } from '../entities/Exploder.js';
-import { Leaper } from '../entities/Leaper.js';
-import { ThirdPersonCamera } from '../camera/ThirdPersonCamera.js';
+import {
+  Scene,
+  FogExp2,
+  PerspectiveCamera,
+  WebGLRenderer,
+  PCFSoftShadowMap,
+  AmbientLight,
+  Clock,
+  Vector3,
+  Vector2,
+  Raycaster,
+  Group,
+  SphereGeometry,
+  MeshBasicMaterial,
+  Mesh,
+  PointLight,
+  BufferGeometry,
+  LineBasicMaterial,
+  Line,
+  Box3
+} from 'three';
+import { SoundSystem } from './SoundSystem';
+import { InputManager } from './InputManager';
+import { ShipLevel } from '../world/ShipLevel';
+import { BloodParticleSystem } from '../graphics/BloodParticleSystem';
+import { Player } from '../entities/Player';
+import { Necromorph } from '../entities/Necromorph';
+import { Exploder } from '../entities/Exploder';
+import { Leaper } from '../entities/Leaper';
+import { ThirdPersonCamera } from '../camera/ThirdPersonCamera';
+import type { GibPart } from '../world/GibPart';
+import type { CameraSettings, LimbMesh } from '../types';
+
+export type Enemy = (Necromorph | Exploder | Leaper) & {
+  type?: string;
+  hasSac?: boolean;
+  exploded?: boolean;
+  killCounted?: boolean;
+  onExplosionCallback?: (blastCenter: Vector3, radius: number, damage: number, instigatedByPlayer: boolean) => void;
+  sacGroup?: Group;
+};
+
+export interface StasisProjectile {
+  group: Group;
+  dir: Vector3;
+  speed: number;
+  life: number;
+}
 
 /**
  * Dead Space Game Engine Core
  * Coordinates scene, rendering, update loop, combat raycasts, enemy variants, and state transitions.
  */
 export class DeadSpaceGame {
+  container: HTMLElement;
+  enemies: Enemy[];
+  gibs: GibPart[];
+  stasisProjectiles: StasisProjectile[];
+  statsKills: number;
+  statsLimbs: number;
+  isPaused: boolean;
+  gameWon: boolean;
+  settingsPreviousModal: 'start' | 'pause';
+
+  scene!: Scene;
+  camera!: PerspectiveCamera;
+  renderer!: WebGLRenderer;
+  ambientLight!: AmbientLight;
+
+  sound: SoundSystem;
+  level: ShipLevel;
+  bloodSys: BloodParticleSystem;
+  player: Player;
+  cameraController: ThirdPersonCamera;
+  settings: CameraSettings;
+  input: InputManager;
+  clock: Clock;
+  promptTimeout?: ReturnType<typeof setTimeout>;
+
   constructor() {
-    this.container = document.getElementById('game-container');
+    this.container = document.getElementById('game-container') as HTMLElement;
     this.enemies = [];
     this.gibs = [];
     this.stasisProjectiles = [];
@@ -49,12 +112,12 @@ export class DeadSpaceGame {
     this.spawnEnemies();
     this.setupUI();
 
-    this.clock = new THREE.Clock();
+    this.clock = new Clock();
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
   }
 
-  loadSettings() {
+  loadSettings(): CameraSettings {
     try {
       const saved = localStorage.getItem('deadspace_settings');
       if (saved) {
@@ -70,7 +133,7 @@ export class DeadSpaceGame {
     };
   }
 
-  saveSettings(partial) {
+  saveSettings(partial: Partial<CameraSettings>): void {
     this.settings = { ...this.settings, ...partial };
     try {
       localStorage.setItem('deadspace_settings', JSON.stringify(this.settings));
@@ -80,7 +143,7 @@ export class DeadSpaceGame {
     this.cameraController.setSettings(this.settings);
   }
 
-  openSettings(fromModal) {
+  openSettings(fromModal: 'start' | 'pause'): void {
     this.settingsPreviousModal = fromModal;
     if (fromModal === 'start') {
       const startModal = document.getElementById('start-screen');
@@ -90,21 +153,21 @@ export class DeadSpaceGame {
       if (pauseModal) pauseModal.classList.remove('active');
     }
 
-    const chkY = document.getElementById('setting-invert-y');
-    const chkX = document.getElementById('setting-invert-x');
-    const rngSens = document.getElementById('setting-sensitivity');
+    const chkY = document.getElementById('setting-invert-y') as HTMLInputElement | null;
+    const chkX = document.getElementById('setting-invert-x') as HTMLInputElement | null;
+    const rngSens = document.getElementById('setting-sensitivity') as HTMLInputElement | null;
     const sensVal = document.getElementById('setting-sens-val');
 
     if (chkY) chkY.checked = !!this.settings.invertY;
     if (chkX) chkX.checked = !!this.settings.invertX;
-    if (rngSens) rngSens.value = this.settings.sensitivity || 1.0;
+    if (rngSens) rngSens.value = String(this.settings.sensitivity || 1.0);
     if (sensVal) sensVal.textContent = `${Number(this.settings.sensitivity || 1.0).toFixed(1)}x`;
 
     const settingsModal = document.getElementById('settings-screen');
     if (settingsModal) settingsModal.classList.add('active');
   }
 
-  closeSettings() {
+  closeSettings(): void {
     const settingsModal = document.getElementById('settings-screen');
     if (settingsModal) settingsModal.classList.remove('active');
 
@@ -117,20 +180,20 @@ export class DeadSpaceGame {
     }
   }
 
-  initThree() {
-    this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x050608, 0.08);
+  initThree(): void {
+    this.scene = new Scene();
+    this.scene.fog = new FogExp2(0x050608, 0.08);
 
-    this.camera = new THREE.PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 100);
+    this.camera = new PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 100);
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    this.renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = PCFSoftShadowMap;
     this.container.appendChild(this.renderer.domElement);
 
-    this.ambientLight = new THREE.AmbientLight(0x080b12, 0.18);
+    this.ambientLight = new AmbientLight(0x080b12, 0.18);
     this.scene.add(this.ambientLight);
 
     window.addEventListener('resize', () => {
@@ -140,16 +203,17 @@ export class DeadSpaceGame {
     });
   }
 
-  spawnEnemies() {
+  spawnEnemies(): void {
     this.level.spawnPoints.forEach((pos, idx) => {
-      let enemy;
+      let enemy: Enemy;
       // Distribute variants: 50% Slasher, 25% Exploder, 25% Leaper
       const variantRoll = (idx % 4);
       if (variantRoll === 1) {
-        enemy = new Exploder(this.scene, this.sound, pos, this.gibs, this.bloodSys);
-        enemy.onExplosionCallback = (blastPos, radius, maxDmg, byPlayer) => {
+        const exp = new Exploder(this.scene, this.sound, pos, this.gibs, this.bloodSys);
+        exp.onExplosionCallback = (blastPos, radius, maxDmg, byPlayer) => {
           this.handleExplosionAoE(blastPos, radius, maxDmg, byPlayer);
         };
+        enemy = exp;
       } else if (variantRoll === 3) {
         enemy = new Leaper(this.scene, this.sound, pos, this.gibs, this.bloodSys);
       } else {
@@ -160,7 +224,7 @@ export class DeadSpaceGame {
     this.updateThreatCounter();
   }
 
-  handleExplosionAoE(blastPos, radius, maxDmg, byPlayer) {
+  handleExplosionAoE(blastPos: Vector3, radius: number, maxDmg: number, _byPlayer: boolean): void {
     // Damage player if within blast radius
     const distToPlayer = blastPos.distanceTo(this.player.root.position);
     if (distToPlayer <= radius && !this.player.isDead) {
@@ -178,10 +242,10 @@ export class DeadSpaceGame {
         const dmgFactor = Math.max(0.3, 1.0 - (d / radius));
         const dmg = Math.round(110 * dmgFactor);
 
-        const awayDir = new THREE.Vector3().subVectors(other.root.position, blastPos).normalize();
+        const awayDir = new Vector3().subVectors(other.root.position, blastPos).normalize();
         if (other.type === 'exploder' && !other.exploded) {
           // Chain reaction detonation!
-          other.explode(true);
+          (other as Exploder).explode(true);
         } else if (other.type === 'leaper') {
           other.takeTorsoDamage(dmg, other.root.position, awayDir);
           if (other.severLimb) {
@@ -211,7 +275,7 @@ export class DeadSpaceGame {
     this.updateThreatCounter();
   }
 
-  handleToggleFlashlight() {
+  handleToggleFlashlight(): void {
     if (this.player.isDead || this.gameWon) return;
     const on = this.player.toggleFlashlight();
     const flBadge = document.getElementById('flashlight-status');
@@ -221,7 +285,7 @@ export class DeadSpaceGame {
     }
   }
 
-  handleReload() {
+  handleReload(): void {
     if (this.player.isDead || this.gameWon) return;
     if (this.player.reload()) {
       this.showPrompt('Recargando Cortador de Plasma...');
@@ -230,18 +294,18 @@ export class DeadSpaceGame {
     }
   }
 
-  handleHeal() {
+  handleHeal(): void {
     if (this.player.isDead || this.gameWon) return;
     if (this.player.heal()) {
       const medkitEl = document.getElementById('medkit-count');
-      if (medkitEl) medkitEl.textContent = this.player.medkits;
+      if (medkitEl) medkitEl.textContent = String(this.player.medkits);
       this.showPrompt('+50 Salud inyectada');
     } else if (this.player.medkits <= 0) {
       this.showPrompt('¡No tienes botiquines!');
     }
   }
 
-  handleAimChange(aiming) {
+  handleAimChange(aiming: boolean): void {
     if (this.player.isDead || this.gameWon) return;
     const crosshair = document.getElementById('crosshair');
     if (crosshair) {
@@ -250,7 +314,7 @@ export class DeadSpaceGame {
     }
   }
 
-  handleStasisFire() {
+  handleStasisFire(): void {
     if (this.player.isDead || this.gameWon || !this.cameraController.isLocked) return;
 
     if (!this.player.isAiming) {
@@ -265,27 +329,27 @@ export class DeadSpaceGame {
     }
 
     if (this.player.fireStasis()) {
-      const armWorldPos = new THREE.Vector3();
+      const armWorldPos = new Vector3();
       this.player.armL.getWorldPosition(armWorldPos);
-      armWorldPos.add(new THREE.Vector3(0, 0.1, 0.25));
+      armWorldPos.add(new Vector3(0, 0.1, 0.25));
 
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+      const raycaster = new Raycaster();
+      raycaster.setFromCamera(new Vector2(0, 0), this.camera);
       const targetDir = raycaster.ray.direction.clone().normalize();
 
       // Glowing Cyan Stasis Orb
-      const orbGroup = new THREE.Group();
+      const orbGroup = new Group();
       orbGroup.position.copy(armWorldPos);
 
-      const coreMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.18, 12, 12),
-        new THREE.MeshBasicMaterial({ color: 0x00f0ff })
+      const coreMesh = new Mesh(
+        new SphereGeometry(0.18, 12, 12),
+        new MeshBasicMaterial({ color: 0x00f0ff })
       );
       orbGroup.add(coreMesh);
 
-      const haloMesh = new THREE.Mesh(
-        new THREE.SphereGeometry(0.32, 8, 8),
-        new THREE.MeshBasicMaterial({
+      const haloMesh = new Mesh(
+        new SphereGeometry(0.32, 8, 8),
+        new MeshBasicMaterial({
           color: 0x38b6ff,
           wireframe: true,
           transparent: true,
@@ -294,7 +358,7 @@ export class DeadSpaceGame {
       );
       orbGroup.add(haloMesh);
 
-      const orbLight = new THREE.PointLight(0x00f0ff, 2.5, 5.0);
+      const orbLight = new PointLight(0x00f0ff, 2.5, 5.0);
       orbGroup.add(orbLight);
 
       this.scene.add(orbGroup);
@@ -308,7 +372,7 @@ export class DeadSpaceGame {
     }
   }
 
-  shootPlasmaCutter() {
+  shootPlasmaCutter(): void {
     if (!this.cameraController.isLocked || this.player.isDead || this.gameWon) return;
 
     if (this.player.ammo <= 0) {
@@ -324,20 +388,20 @@ export class DeadSpaceGame {
     // Alert nearby enemies with sound
     this.enemies.forEach(e => e.alertNearby(this.player.root.position));
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    const raycaster = new Raycaster();
+    raycaster.setFromCamera(new Vector2(0, 0), this.camera);
 
-    const shootableLimbMeshes = [];
+    const shootableLimbMeshes: LimbMesh[] = [];
     this.enemies.forEach(enemy => {
       if (!enemy.isDead) {
         enemy.root.traverse(child => {
-          if (child.isLimb) shootableLimbMeshes.push(child);
+          if ((child as LimbMesh).isLimb) shootableLimbMeshes.push(child as LimbMesh);
         });
       } else if (enemy.type === 'exploder' && enemy.hasSac && !enemy.exploded) {
         // Volatile sac on a dead exploder corpse remains shootable and explosive!
         if (enemy.sacGroup) {
           enemy.sacGroup.traverse(child => {
-            if (child.isLimb) shootableLimbMeshes.push(child);
+            if ((child as LimbMesh).isLimb) shootableLimbMeshes.push(child as LimbMesh);
           });
         }
       }
@@ -345,27 +409,28 @@ export class DeadSpaceGame {
 
     const hits = raycaster.intersectObjects(shootableLimbMeshes, false);
 
-    const beamOrigin = new THREE.Vector3();
+    const beamOrigin = new Vector3();
     this.player.weaponGroup.getWorldPosition(beamOrigin);
-    beamOrigin.add(new THREE.Vector3(0, 0.05, 0));
+    beamOrigin.add(new Vector3(0, 0.05, 0));
 
     let beamTarget = raycaster.ray.origin.clone().add(raycaster.ray.direction.clone().multiplyScalar(30));
 
     if (hits.length > 0) {
       const hit = hits[0];
       beamTarget = hit.point;
-      const hitMesh = hit.object;
-      const enemy = hitMesh.enemyRef;
+      const hitMesh = hit.object as LimbMesh;
+      const enemy = hitMesh.enemyRef as Enemy | undefined;
 
       if (enemy) {
+        const hitNormal = hit.face ? hit.face.normal : new Vector3(0, 1, 0);
         if (!enemy.isDead) {
           if (hitMesh.limbType === 'torso') {
-            enemy.takeTorsoDamage(10, hit.point, hit.face.normal);
+            enemy.takeTorsoDamage(10, hit.point, hitNormal);
             this.showPrompt('¡Corta las extremidades! El torso absorbe el daño');
           } else {
-            hitMesh.limbHp -= 35;
+            hitMesh.limbHp = (hitMesh.limbHp || 25) - 35;
             if (hitMesh.limbHp <= 0) {
-              enemy.severLimb(hitMesh.limbType, hit.face.normal);
+              if (enemy.severLimb) enemy.severLimb(hitMesh.limbType, hitNormal);
               this.statsLimbs++;
               if (enemy.isDead && !enemy.killCounted) {
                 enemy.killCounted = true;
@@ -373,12 +438,12 @@ export class DeadSpaceGame {
               }
               this.updateThreatCounter();
             } else {
-              this.bloodSys.spawnSplatter(hit.point, hit.face.normal, 15);
+              this.bloodSys.spawnSplatter(hit.point, hitNormal, 15);
             }
           }
         } else if (enemy.type === 'exploder' && hitMesh.limbType === 'explosive_sac' && !enemy.exploded) {
           // Detonate sac of dead exploder lying on floor or standing!
-          enemy.explode(true);
+          (enemy as Exploder).explode(true);
         }
       }
     }
@@ -386,18 +451,18 @@ export class DeadSpaceGame {
     this.createPlasmaBeamTracer(beamOrigin, beamTarget);
   }
 
-  createPlasmaBeamTracer(start, end) {
-    const geom = new THREE.BufferGeometry().setFromPoints([start, end]);
-    const mat = new THREE.LineBasicMaterial({
+  createPlasmaBeamTracer(start: Vector3, end: Vector3): void {
+    const geom = new BufferGeometry().setFromPoints([start, end]);
+    const mat = new LineBasicMaterial({
       color: 0x00f0ff,
       linewidth: 3,
       transparent: true,
       opacity: 0.95
     });
-    const line = new THREE.Line(geom, mat);
+    const line = new Line(geom, mat);
     this.scene.add(line);
 
-    const muzzleLight = new THREE.PointLight(0x00f0ff, 4.0, 5.0);
+    const muzzleLight = new PointLight(0x00f0ff, 4.0, 5.0);
     muzzleLight.position.copy(start);
     this.scene.add(muzzleLight);
 
@@ -407,7 +472,7 @@ export class DeadSpaceGame {
     }, 60);
   }
 
-  checkPickupsAndEscape() {
+  checkPickupsAndEscape(): void {
     const pPos = this.player.root.position;
 
     this.level.pickups.forEach(item => {
@@ -427,7 +492,7 @@ export class DeadSpaceGame {
           } else {
             this.player.medkits++;
             const medkitEl = document.getElementById('medkit-count');
-            if (medkitEl) medkitEl.textContent = this.player.medkits;
+            if (medkitEl) medkitEl.textContent = String(this.player.medkits);
             this.showPrompt('+1 Botiquín RIG recogido');
           }
           this.sound.playFlashlight();
@@ -443,26 +508,26 @@ export class DeadSpaceGame {
     }
   }
 
-  updateThreatCounter() {
+  updateThreatCounter(): void {
     const alive = this.enemies.filter(e => !e.isDead).length;
     const el = document.getElementById('enemies-alive-count');
     if (el) el.textContent = `${alive}`;
   }
 
-  showPrompt(msg) {
+  showPrompt(msg: string): void {
     const bar = document.getElementById('prompt-bar');
     const txt = document.getElementById('prompt-message');
     if (bar && txt) {
       txt.textContent = msg;
       bar.classList.remove('prompt-bar-hidden');
-      clearTimeout(this.promptTimeout);
+      if (this.promptTimeout) clearTimeout(this.promptTimeout);
       this.promptTimeout = setTimeout(() => {
         bar.classList.add('prompt-bar-hidden');
       }, 2500);
     }
   }
 
-  togglePause() {
+  togglePause(): void {
     const settingsModal = document.getElementById('settings-screen');
     if (settingsModal && settingsModal.classList.contains('active')) {
       this.closeSettings();
@@ -471,45 +536,54 @@ export class DeadSpaceGame {
 
     this.isPaused = !this.isPaused;
     const modal = document.getElementById('pause-screen');
-    if (this.isPaused) {
-      modal.classList.add('active');
-      document.exitPointerLock();
-    } else {
-      modal.classList.remove('active');
-      this.container.requestPointerLock();
+    if (modal) {
+      if (this.isPaused) {
+        modal.classList.add('active');
+        document.exitPointerLock();
+      } else {
+        modal.classList.remove('active');
+        this.container.requestPointerLock();
+      }
     }
   }
 
-  triggerGameOver() {
+  triggerGameOver(): void {
     document.exitPointerLock();
     const deathModal = document.getElementById('death-screen');
     if (deathModal) deathModal.classList.add('active');
   }
 
-  triggerVictory() {
+  triggerVictory(): void {
     this.gameWon = true;
     document.exitPointerLock();
     const winModal = document.getElementById('victory-screen');
     if (winModal) {
-      document.getElementById('stat-kills').textContent = `${this.statsKills}`;
-      document.getElementById('stat-limbs').textContent = `${this.statsLimbs}`;
+      const killsEl = document.getElementById('stat-kills');
+      const limbsEl = document.getElementById('stat-limbs');
+      if (killsEl) killsEl.textContent = `${this.statsKills}`;
+      if (limbsEl) limbsEl.textContent = `${this.statsLimbs}`;
       winModal.classList.add('active');
     }
   }
 
-  setupUI() {
+  setupUI(): void {
     const btnStart = document.getElementById('btn-start');
-    btnStart.addEventListener('click', () => {
-      this.sound.init();
-      this.sound.resume();
-      document.getElementById('start-screen').classList.remove('active');
-      this.container.requestPointerLock();
-    });
+    if (btnStart) {
+      btnStart.addEventListener('click', () => {
+        this.sound.init();
+        this.sound.resume();
+        const startScreen = document.getElementById('start-screen');
+        if (startScreen) startScreen.classList.remove('active');
+        this.container.requestPointerLock();
+      });
+    }
 
     const btnResume = document.getElementById('btn-resume');
-    btnResume.addEventListener('click', () => {
-      this.togglePause();
-    });
+    if (btnResume) {
+      btnResume.addEventListener('click', () => {
+        this.togglePause();
+      });
+    }
 
     const btnSettingsStart = document.getElementById('btn-settings-start');
     if (btnSettingsStart) {
@@ -528,35 +602,38 @@ export class DeadSpaceGame {
 
     const chkY = document.getElementById('setting-invert-y');
     if (chkY) {
-      chkY.addEventListener('change', (e) => {
-        this.saveSettings({ invertY: e.target.checked });
+      chkY.addEventListener('change', (e: Event) => {
+        this.saveSettings({ invertY: (e.target as HTMLInputElement).checked });
       });
     }
 
     const chkX = document.getElementById('setting-invert-x');
     if (chkX) {
-      chkX.addEventListener('change', (e) => {
-        this.saveSettings({ invertX: e.target.checked });
+      chkX.addEventListener('change', (e: Event) => {
+        this.saveSettings({ invertX: (e.target as HTMLInputElement).checked });
       });
     }
 
     const rngSens = document.getElementById('setting-sensitivity');
     const sensVal = document.getElementById('setting-sens-val');
     if (rngSens) {
-      rngSens.addEventListener('input', (e) => {
-        const val = parseFloat(e.target.value);
+      rngSens.addEventListener('input', (e: Event) => {
+        const val = parseFloat((e.target as HTMLInputElement).value);
         if (sensVal) sensVal.textContent = `${val.toFixed(1)}x`;
         this.saveSettings({ sensitivity: val });
       });
     }
 
-    const reloadGame = () => window.location.reload();
-    document.getElementById('btn-restart-pause').addEventListener('click', reloadGame);
-    document.getElementById('btn-restart-death').addEventListener('click', reloadGame);
-    document.getElementById('btn-restart-victory').addEventListener('click', reloadGame);
+    const reloadGame = (): void => window.location.reload();
+    const restartPause = document.getElementById('btn-restart-pause');
+    if (restartPause) restartPause.addEventListener('click', reloadGame);
+    const restartDeath = document.getElementById('btn-restart-death');
+    if (restartDeath) restartDeath.addEventListener('click', reloadGame);
+    const restartVictory = document.getElementById('btn-restart-victory');
+    if (restartVictory) restartVictory.addEventListener('click', reloadGame);
   }
 
-  animate() {
+  animate(): void {
     requestAnimationFrame(this.animate);
 
     const dt = Math.min(this.clock.getDelta(), 0.1);
@@ -583,7 +660,7 @@ export class DeadSpaceGame {
         for (let e = 0; e < this.enemies.length; e++) {
           const enemy = this.enemies[e];
           if (!enemy.isDead) {
-            const enemyCenter = enemy.root.position.clone().add(new THREE.Vector3(0, 0.9, 0));
+            const enemyCenter = enemy.root.position.clone().add(new Vector3(0, 0.9, 0));
             if (enemyCenter.distanceTo(proj.group.position) < 1.35) {
               hit = true;
               hitPos.copy(proj.group.position);
@@ -607,7 +684,7 @@ export class DeadSpaceGame {
 
         // Check collision against level colliders
         if (!hit) {
-          const pBox = new THREE.Box3().setFromCenterAndSize(proj.group.position, new THREE.Vector3(0.3, 0.3, 0.3));
+          const pBox = new Box3().setFromCenterAndSize(proj.group.position, new Vector3(0.3, 0.3, 0.3));
           for (let c = 0; c < this.level.colliders.length; c++) {
             if (pBox.intersectsBox(this.level.colliders[c])) {
               hit = true;
@@ -636,7 +713,8 @@ export class DeadSpaceGame {
       this.bloodSys.update(dt);
       this.checkPickupsAndEscape();
 
-      if (this.player.isDead && !document.getElementById('death-screen').classList.contains('active')) {
+      const deathScreen = document.getElementById('death-screen');
+      if (this.player.isDead && deathScreen && !deathScreen.classList.contains('active')) {
         this.triggerGameOver();
       }
     }

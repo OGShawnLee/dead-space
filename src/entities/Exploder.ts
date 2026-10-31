@@ -1,7 +1,21 @@
-const THREE = window.THREE;
-import { TextureFactory } from '../graphics/TextureFactory.js';
-import { GibPart } from '../world/GibPart.js';
-import { checkLineOfSight } from '../world/LineOfSight.js';
+import {
+  Group,
+  Mesh,
+  BoxGeometry,
+  MeshStandardMaterial,
+  PointLight,
+  Vector3,
+  Quaternion,
+  Box3,
+  type Scene
+} from 'three';
+import { TextureFactory } from '../graphics/TextureFactory';
+import { GibPart } from '../world/GibPart';
+import { checkLineOfSight } from '../world/LineOfSight';
+import type { SoundSystem } from '../core/SoundSystem';
+import type { BloodParticleSystem } from '../graphics/BloodParticleSystem';
+import type { Player } from './Player';
+import type { LimbMesh, LimbType } from '../types';
 
 /**
  * Exploder Necromorph Entity
@@ -14,7 +28,64 @@ import { checkLineOfSight } from '../world/LineOfSight.js';
  * - Stasis Module temporal dilation (slows running, detonation fuse, and animation by 50%)
  */
 export class Exploder {
-  constructor(scene, soundSystem, spawnPos, gibList, bloodSys) {
+  scene: Scene;
+  sound: SoundSystem;
+  gibList: GibPart[];
+  bloodSys: BloodParticleSystem;
+
+  type: string;
+  hp: number;
+  isDead: boolean;
+  exploded: boolean;
+  state: 'PATROL' | 'CHASE';
+  patrolTimer: number;
+  patrolDir: number;
+
+  baseSpeed: number;
+  speed: number;
+  explodeRange: number;
+  squealTimer: number;
+  fuseTimer: number;
+  isDetonating: boolean;
+
+  // Stasis Status
+  stasisTimer: number;
+  stasisFactor: number;
+
+  // Limb Tracking
+  hasHead: boolean;
+  hasSac: boolean;
+  hasArmR: boolean;
+  hasLegL: boolean;
+  hasLegR: boolean;
+  isCrawling: boolean;
+
+  root: Group;
+  matSkin: MeshStandardMaterial;
+  matSac: MeshStandardMaterial;
+
+  torsoMesh!: Mesh;
+  headMesh!: Mesh;
+  armLGroup!: Group;
+  sacGroup!: Group;
+  sacMesh!: Mesh;
+  sacLight!: PointLight;
+  armRGroup!: Group;
+  armRMesh!: Mesh;
+  legLGroup!: Group;
+  legLMesh!: Mesh;
+  legRGroup!: Group;
+  legRMesh!: Mesh;
+
+  onExplosionCallback?: (blastCenter: Vector3, radius: number, damage: number, instigatedByPlayer: boolean) => void;
+
+  constructor(
+    scene: Scene,
+    soundSystem: SoundSystem,
+    spawnPos: Vector3,
+    gibList: GibPart[],
+    bloodSys: BloodParticleSystem
+  ) {
     this.scene = scene;
     this.sound = soundSystem;
     this.gibList = gibList;
@@ -47,18 +118,18 @@ export class Exploder {
     this.hasLegR = true;
     this.isCrawling = false;
 
-    this.root = new THREE.Group();
+    this.root = new Group();
     this.root.position.copy(spawnPos);
     this.scene.add(this.root);
 
-    this.matSkin = new THREE.MeshStandardMaterial({
+    this.matSkin = new MeshStandardMaterial({
       map: TextureFactory.createNecroSkin(),
       roughness: 0.75,
       metalness: 0.1
     });
 
     // Volatile glowing orange/yellow organic explosive material
-    this.matSac = new THREE.MeshStandardMaterial({
+    this.matSac = new MeshStandardMaterial({
       color: 0xffaa00,
       emissive: 0xff5500,
       emissiveIntensity: 0.85,
@@ -69,62 +140,63 @@ export class Exploder {
     this.buildBody();
   }
 
-  applyStasis(duration = 5.0, factor = 0.5) {
+  applyStasis(duration = 5.0, factor = 0.5): void {
     this.stasisTimer = Math.max(this.stasisTimer, duration);
     this.stasisFactor = factor;
   }
 
-  tagLimb(mesh, type, hp) {
-    mesh.isLimb = true;
-    mesh.limbType = type;
-    mesh.limbHp = hp;
-    mesh.enemyRef = this;
+  tagLimb(mesh: Mesh, type: LimbType, hp: number): void {
+    const limb = mesh as LimbMesh;
+    limb.isLimb = true;
+    limb.limbType = type;
+    limb.limbHp = hp;
+    limb.enemyRef = this;
   }
 
-  buildBody() {
+  buildBody(): void {
     // 1. Hunched Torso
-    const torsoGeo = new THREE.BoxGeometry(0.52, 0.75, 0.38);
-    this.torsoMesh = new THREE.Mesh(torsoGeo, this.matSkin);
+    const torsoGeo = new BoxGeometry(0.52, 0.75, 0.38);
+    this.torsoMesh = new Mesh(torsoGeo, this.matSkin);
     this.torsoMesh.position.y = 1.05;
     this.torsoMesh.rotation.x = 0.2; // Hunched forward
     this.tagLimb(this.torsoMesh, 'torso', 999);
     this.root.add(this.torsoMesh);
 
     // 2. Twisted Head (HP: 25)
-    const headGeo = new THREE.BoxGeometry(0.28, 0.32, 0.32);
-    this.headMesh = new THREE.Mesh(headGeo, this.matSkin);
+    const headGeo = new BoxGeometry(0.28, 0.32, 0.32);
+    this.headMesh = new Mesh(headGeo, this.matSkin);
     this.headMesh.position.set(0, 0.52, 0.12);
     this.tagLimb(this.headMesh, 'head', 25);
     this.torsoMesh.add(this.headMesh);
 
     // 3. Volatile Explosive Sac Arm (Left) (HP: 18 - 1 shot detonates it!)
-    this.armLGroup = new THREE.Group();
+    this.armLGroup = new Group();
     this.armLGroup.position.set(-0.38, 0.25, 0.05);
 
     // Stumpy shoulder
-    const shoulderGeo = new THREE.BoxGeometry(0.2, 0.28, 0.2);
-    const shoulderMesh = new THREE.Mesh(shoulderGeo, this.matSkin);
+    const shoulderGeo = new BoxGeometry(0.2, 0.28, 0.2);
+    const shoulderMesh = new Mesh(shoulderGeo, this.matSkin);
     shoulderMesh.position.y = -0.12;
     this.armLGroup.add(shoulderMesh);
 
     // Grotesque rectangular mutated explosive sac cluster (fits the cuboid modular aesthetic)
-    this.sacGroup = new THREE.Group();
+    this.sacGroup = new Group();
     this.sacGroup.position.set(-0.15, -0.45, 0.15);
 
     // Main rectangular explosive core box
-    const mainSacGeo = new THREE.BoxGeometry(0.44, 0.65, 0.44);
-    this.sacMesh = new THREE.Mesh(mainSacGeo, this.matSac);
+    const mainSacGeo = new BoxGeometry(0.44, 0.65, 0.44);
+    this.sacMesh = new Mesh(mainSacGeo, this.matSac);
     this.sacGroup.add(this.sacMesh);
 
     // Secondary protruding angular pustules
-    const pustuleGeo1 = new THREE.BoxGeometry(0.25, 0.28, 0.25);
-    const pustule1 = new THREE.Mesh(pustuleGeo1, this.matSac);
+    const pustuleGeo1 = new BoxGeometry(0.25, 0.28, 0.25);
+    const pustule1 = new Mesh(pustuleGeo1, this.matSac);
     pustule1.position.set(-0.14, 0.16, 0.08);
     pustule1.rotation.set(0.1, 0.2, -0.15);
     this.sacGroup.add(pustule1);
 
-    const pustuleGeo2 = new THREE.BoxGeometry(0.26, 0.24, 0.28);
-    const pustule2 = new THREE.Mesh(pustuleGeo2, this.matSac);
+    const pustuleGeo2 = new BoxGeometry(0.26, 0.24, 0.28);
+    const pustule2 = new Mesh(pustuleGeo2, this.matSac);
     pustule2.position.set(0.12, -0.18, -0.08);
     pustule2.rotation.set(-0.1, -0.15, 0.1);
     this.sacGroup.add(pustule2);
@@ -132,7 +204,7 @@ export class Exploder {
     this.armLGroup.add(this.sacGroup);
 
     // Glowing sac core point light
-    this.sacLight = new THREE.PointLight(0xff7700, 1.8, 4.0);
+    this.sacLight = new PointLight(0xff7700, 1.8, 4.0);
     this.sacLight.position.set(-0.15, -0.45, 0.15);
     this.armLGroup.add(this.sacLight);
 
@@ -143,36 +215,36 @@ export class Exploder {
     this.torsoMesh.add(this.armLGroup);
 
     // 4. Right Arm (Deformed claw) (HP: 25)
-    this.armRGroup = new THREE.Group();
+    this.armRGroup = new Group();
     this.armRGroup.position.set(0.38, 0.25, 0);
-    const armRGeo = new THREE.BoxGeometry(0.16, 0.55, 0.16);
-    this.armRMesh = new THREE.Mesh(armRGeo, this.matSkin);
+    const armRGeo = new BoxGeometry(0.16, 0.55, 0.16);
+    this.armRMesh = new Mesh(armRGeo, this.matSkin);
     this.armRMesh.position.y = -0.25;
     this.tagLimb(this.armRMesh, 'arm_right', 25);
     this.armRGroup.add(this.armRMesh);
     this.torsoMesh.add(this.armRGroup);
 
     // 5. Left Leg (HP: 25)
-    this.legLGroup = new THREE.Group();
+    this.legLGroup = new Group();
     this.legLGroup.position.set(-0.18, -0.38, 0);
-    const legGeo = new THREE.BoxGeometry(0.18, 0.72, 0.18);
-    this.legLMesh = new THREE.Mesh(legGeo, this.matSkin);
+    const legGeo = new BoxGeometry(0.18, 0.72, 0.18);
+    this.legLMesh = new Mesh(legGeo, this.matSkin);
     this.legLMesh.position.y = -0.35;
     this.tagLimb(this.legLMesh, 'leg_left', 25);
     this.legLGroup.add(this.legLMesh);
     this.torsoMesh.add(this.legLGroup);
 
     // 6. Right Leg (HP: 25)
-    this.legRGroup = new THREE.Group();
+    this.legRGroup = new Group();
     this.legRGroup.position.set(0.18, -0.38, 0);
-    this.legRMesh = new THREE.Mesh(legGeo, this.matSkin);
+    this.legRMesh = new Mesh(legGeo, this.matSkin);
     this.legRMesh.position.y = -0.35;
     this.tagLimb(this.legRMesh, 'leg_right', 25);
     this.legRGroup.add(this.legRMesh);
     this.torsoMesh.add(this.legRGroup);
   }
 
-  severLimb(limbType, hitNormal) {
+  severLimb(limbType: LimbType, hitNormal?: Vector3): void {
     if (this.isDead && limbType !== 'explosive_sac') return;
 
     // Shooting the explosive sac directly triggers a violent detonation!
@@ -181,8 +253,8 @@ export class Exploder {
       return;
     }
 
-    let targetMesh = null;
-    let parentGroup = null;
+    let targetMesh: any = null;
+    let parentGroup: any = null;
 
     if (limbType === 'head' && this.hasHead) {
       this.hasHead = false;
@@ -213,19 +285,19 @@ export class Exploder {
     }
 
     if (targetMesh && parentGroup) {
-      const worldPos = new THREE.Vector3();
-      const worldQuat = new THREE.Quaternion();
+      const worldPos = new Vector3();
+      const worldQuat = new Quaternion();
       targetMesh.getWorldPosition(worldPos);
       targetMesh.getWorldQuaternion(worldQuat);
 
       parentGroup.remove(targetMesh);
 
-      const gibGeo = targetMesh instanceof THREE.Group
-        ? new THREE.BoxGeometry(0.2, 0.65, 0.2)
+      const gibGeo = targetMesh instanceof Group
+        ? new BoxGeometry(0.2, 0.65, 0.2)
         : targetMesh.geometry.clone();
-      this.gibList.push(new GibPart(this.scene, gibGeo, this.matSkin, worldPos, worldQuat, hitNormal || new THREE.Vector3(0, 1, 0)));
+      this.gibList.push(new GibPart(this.scene, gibGeo, this.matSkin, worldPos, worldQuat, hitNormal || new Vector3(0, 1, 0)));
 
-      this.bloodSys.spawnSplatter(worldPos, hitNormal || new THREE.Vector3(0, 1, 0), 28);
+      this.bloodSys.spawnSplatter(worldPos, hitNormal || new Vector3(0, 1, 0), 28);
 
       // Exactly matching Necromorph crawling architecture
       if (!this.hasLegL && !this.hasLegR && !this.isCrawling) {
@@ -241,24 +313,24 @@ export class Exploder {
     }
   }
 
-  takeTorsoDamage(amount, hitPos, hitNormal) {
+  takeTorsoDamage(amount: number, hitPos: Vector3, hitNormal: Vector3): void {
     if (this.isDead) return;
     this.hp -= amount;
     this.bloodSys.spawnSplatter(hitPos, hitNormal, 12);
     if (this.hp <= 0) this.die();
   }
 
-  explode(instigatedByPlayer = false) {
+  explode(instigatedByPlayer = false): void {
     if (this.exploded) return;
     this.exploded = true;
     this.isDead = true;
     this.hasSac = false;
 
-    const blastCenter = new THREE.Vector3();
+    const blastCenter = new Vector3();
     if (this.sacGroup) {
       this.sacGroup.getWorldPosition(blastCenter);
     } else {
-      blastCenter.copy(this.root.position).add(new THREE.Vector3(0, 0.5, 0));
+      blastCenter.copy(this.root.position).add(new Vector3(0, 0.5, 0));
     }
 
     this.sound.playExplosion();
@@ -276,7 +348,7 @@ export class Exploder {
     }
   }
 
-  die() {
+  die(): void {
     if (this.isDead) return;
     this.isDead = true;
     this.sound.playNecroGrowl(false);
@@ -292,7 +364,7 @@ export class Exploder {
     }
   }
 
-  alertNearby(pos) {
+  alertNearby(pos: Vector3): void {
     if (this.isDead || this.state === 'CHASE') return;
     const dist = this.root.position.distanceTo(pos);
     if (dist < 12.0) {
@@ -301,7 +373,7 @@ export class Exploder {
     }
   }
 
-  update(dt, player, colliders) {
+  update(dt: number, player: Player, colliders: Box3[]): void {
     if (this.isDead) {
       // If dead but sac is intact, maintain a low volatile breathing pulse
       if (this.hasSac && this.sacLight && !this.exploded) {
@@ -317,7 +389,7 @@ export class Exploder {
       this.stasisTimer -= dt;
       effectiveDt = dt * this.stasisFactor;
       if (Math.random() < 0.25 && this.bloodSys) {
-        const sparkPos = this.root.position.clone().add(new THREE.Vector3(
+        const sparkPos = this.root.position.clone().add(new Vector3(
           (Math.random() - 0.5) * 0.7,
           Math.random() * 1.5,
           (Math.random() - 0.5) * 0.7
@@ -333,9 +405,9 @@ export class Exploder {
       this.matSac.emissiveIntensity = pulse * (this.isDetonating ? 1.8 : 0.85);
     }
 
-    const enemyEyePos = this.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
-    const playerTorsoPos = player.root.position.clone().add(new THREE.Vector3(0, 1.2, 0));
-    const toPlayer = new THREE.Vector3().subVectors(player.root.position, this.root.position);
+    const enemyEyePos = this.root.position.clone().add(new Vector3(0, 1.2, 0));
+    const playerTorsoPos = player.root.position.clone().add(new Vector3(0, 1.2, 0));
+    const toPlayer = new Vector3().subVectors(player.root.position, this.root.position);
     const dist = toPlayer.length();
 
     const hasLoS = checkLineOfSight(enemyEyePos, playerTorsoPos, colliders);
@@ -351,12 +423,12 @@ export class Exploder {
           this.patrolDir = Math.random() * Math.PI * 2;
         }
 
-        const moveVec = new THREE.Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar((this.isCrawling ? 0.45 : 0.9) * effectiveDt);
+        const moveVec = new Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar((this.isCrawling ? 0.45 : 0.9) * effectiveDt);
         const nextPos = this.root.position.clone().add(moveVec);
 
-        const testBox = new THREE.Box3(
-          new THREE.Vector3(nextPos.x - 0.45, 0.1, nextPos.z - 0.45),
-          new THREE.Vector3(nextPos.x + 0.45, this.isCrawling ? 0.7 : 1.8, nextPos.z + 0.45)
+        const testBox = new Box3(
+          new Vector3(nextPos.x - 0.45, 0.1, nextPos.z - 0.45),
+          new Vector3(nextPos.x + 0.45, this.isCrawling ? 0.7 : 1.8, nextPos.z + 0.45)
         );
 
         let blocked = false;
@@ -406,9 +478,9 @@ export class Exploder {
         const moveStep = toPlayer.clone().multiplyScalar(this.speed * effectiveDt);
         const nextPos = this.root.position.clone().add(moveStep);
 
-        const testBox = new THREE.Box3(
-          new THREE.Vector3(nextPos.x - 0.45, 0.1, nextPos.z - 0.45),
-          new THREE.Vector3(nextPos.x + 0.45, this.isCrawling ? 0.7 : 1.8, nextPos.z + 0.45)
+        const testBox = new Box3(
+          new Vector3(nextPos.x - 0.45, 0.1, nextPos.z - 0.45),
+          new Vector3(nextPos.x + 0.45, this.isCrawling ? 0.7 : 1.8, nextPos.z + 0.45)
         );
 
         let blocked = false;

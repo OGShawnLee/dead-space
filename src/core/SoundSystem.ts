@@ -3,16 +3,14 @@
  * 100% synthesized sound effects with zero external audio files.
  */
 export class SoundSystem {
-  constructor() {
-    this.ctx = null;
-    this.initialized = false;
-    this.masterGain = null;
-    this.droneOsc = null;
-  }
+  ctx: AudioContext | null = null;
+  initialized = false;
+  masterGain: GainNode | null = null;
+  droneOsc: OscillatorNode | null = null;
 
-  init() {
+  init(): void {
     if (this.initialized) return;
-    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     this.ctx = new AudioCtx();
     this.masterGain = this.ctx.createGain();
     this.masterGain.gain.setValueAtTime(0.55, this.ctx.currentTime);
@@ -21,14 +19,14 @@ export class SoundSystem {
     this.startAmbientDrone();
   }
 
-  resume() {
+  resume(): void {
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
   }
 
-  playPlasmaShot() {
-    if (!this.initialized) return;
+  playPlasmaShot(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
     const osc = this.ctx.createOscillator();
@@ -69,8 +67,8 @@ export class SoundSystem {
     noise.start(now);
   }
 
-  playPlasmaEmpty() {
-    if (!this.initialized) return;
+  playPlasmaEmpty(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -84,11 +82,12 @@ export class SoundSystem {
     osc.stop(now + 0.05);
   }
 
-  playReload() {
-    if (!this.initialized) return;
+  playReload(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
-    const click = (time, freq, dur) => {
+    const click = (time: number, freq: number, dur: number) => {
+      if (!this.ctx || !this.masterGain) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
@@ -105,8 +104,8 @@ export class SoundSystem {
     click(now + 0.18, 520, 0.12);
   }
 
-  playDismember() {
-    if (!this.initialized) return;
+  playDismember(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
     const osc = this.ctx.createOscillator();
@@ -143,8 +142,8 @@ export class SoundSystem {
     noise.start(now);
   }
 
-  playNecroGrowl(screech = false) {
-    if (!this.initialized) return;
+  playNecroGrowl(screech = false): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
     const osc = this.ctx.createOscillator();
@@ -181,8 +180,8 @@ export class SoundSystem {
     osc.stop(now + 0.52);
   }
 
-  playNecroAttack() {
-    if (!this.initialized) return;
+  playNecroAttack(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -197,8 +196,8 @@ export class SoundSystem {
     osc.stop(now + 0.21);
   }
 
-  playPlayerHurt() {
-    if (!this.initialized) return;
+  playPlayerHurt(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -213,8 +212,8 @@ export class SoundSystem {
     osc.stop(now + 0.3);
   }
 
-  playMedkit() {
-    if (!this.initialized) return;
+  playMedkit(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const bufferSize = this.ctx.sampleRate * 0.3;
     const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
@@ -251,8 +250,8 @@ export class SoundSystem {
     osc.stop(now + 0.42);
   }
 
-  playFootstep(isRunning) {
-    if (!this.initialized) return;
+  playFootstep(isRunning: boolean): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -268,8 +267,8 @@ export class SoundSystem {
     osc.stop(now + 0.1);
   }
 
-  playFlashlight() {
-    if (!this.initialized) return;
+  playFlashlight(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -283,11 +282,12 @@ export class SoundSystem {
     osc.stop(now + 0.04);
   }
 
-  playHeartbeatThump() {
-    if (!this.initialized) return;
+  playHeartbeatThump(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
-    const thump = (time, freq, vol) => {
+    const thump = (time: number, freq: number, vol: number) => {
+      if (!this.ctx || !this.masterGain) return;
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
@@ -305,8 +305,8 @@ export class SoundSystem {
     thump(now + 0.14, 55, 0.5);
   }
 
-  playExplosion() {
-    if (!this.initialized) return;
+  playExplosion(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
     // Sub-bass shockwave
@@ -344,8 +344,8 @@ export class SoundSystem {
     noise.start(now);
   }
 
-  playExploderSqueal() {
-    if (!this.initialized) return;
+  playExploderSqueal(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -360,8 +360,8 @@ export class SoundSystem {
     osc.stop(now + 0.38);
   }
 
-  playLeaperScreech() {
-    if (!this.initialized) return;
+  playLeaperScreech(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const mod = this.ctx.createOscillator();
@@ -389,8 +389,8 @@ export class SoundSystem {
     osc.stop(now + 0.44);
   }
 
-  playStasisFire() {
-    if (!this.initialized) return;
+  playStasisFire(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
     const osc = this.ctx.createOscillator();
@@ -422,8 +422,8 @@ export class SoundSystem {
     osc.stop(now + 0.42);
   }
 
-  playStasisHit() {
-    if (!this.initialized) return;
+  playStasisHit(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
 
     const osc = this.ctx.createOscillator();
@@ -463,8 +463,8 @@ export class SoundSystem {
     noise.start(now);
   }
 
-  playStasisEmpty() {
-    if (!this.initialized) return;
+  playStasisEmpty(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
@@ -482,8 +482,8 @@ export class SoundSystem {
     osc.stop(now + 0.18);
   }
 
-  startAmbientDrone() {
-    if (!this.initialized || this.droneOsc) return;
+  startAmbientDrone(): void {
+    if (!this.initialized || !this.ctx || !this.masterGain || this.droneOsc) return;
     const now = this.ctx.currentTime;
     this.droneOsc = this.ctx.createOscillator();
     const droneGain = this.ctx.createGain();

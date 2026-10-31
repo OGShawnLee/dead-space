@@ -1,9 +1,14 @@
+import type { InputState, InputHandlers } from '../types';
+
 /**
  * Input Manager
  * Manages keyboard, mouse buttons, aiming triggers, and contextual keybinds.
  */
 export class InputManager {
-  constructor(handlers = {}) {
+  handlers: InputHandlers;
+  state: InputState;
+
+  constructor(handlers: InputHandlers = {}) {
     this.handlers = handlers;
     this.state = {
       forward: false,
@@ -17,8 +22,8 @@ export class InputManager {
     this.setupListeners();
   }
 
-  setupListeners() {
-    window.addEventListener('keydown', (e) => {
+  setupListeners(): void {
+    window.addEventListener('keydown', (e: KeyboardEvent) => {
       switch (e.code) {
         case 'KeyW': this.state.forward = true; break;
         case 'KeyS': this.state.backward = true; break;
@@ -44,7 +49,7 @@ export class InputManager {
       }
     });
 
-    window.addEventListener('keyup', (e) => {
+    window.addEventListener('keyup', (e: KeyboardEvent) => {
       switch (e.code) {
         case 'KeyW': this.state.forward = false; break;
         case 'KeyS': this.state.backward = false; break;
@@ -54,7 +59,7 @@ export class InputManager {
       }
     });
 
-    window.addEventListener('mousedown', (e) => {
+    window.addEventListener('mousedown', (e: MouseEvent) => {
       if (e.button === 2) {
         this.state.aiming = true;
         if (this.handlers.onAimChange) this.handlers.onAimChange(true);
@@ -66,13 +71,13 @@ export class InputManager {
       }
     });
 
-    window.addEventListener('mouseup', (e) => {
+    window.addEventListener('mouseup', (e: MouseEvent) => {
       if (e.button === 2) {
         this.state.aiming = false;
         if (this.handlers.onAimChange) this.handlers.onAimChange(false);
       }
     });
 
-    window.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('contextmenu', (e: MouseEvent) => e.preventDefault());
   }
 }

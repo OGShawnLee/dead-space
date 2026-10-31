@@ -1,4 +1,6 @@
-const THREE = window.THREE;
+import { PerspectiveCamera, Vector3, MathUtils, Ray, type Box3, type Scene } from 'three';
+import type { Player } from '../entities/Player';
+import type { CameraSettings } from '../types';
 
 /**
  * Third-Person Over-the-Shoulder Camera Controller
@@ -11,7 +13,31 @@ const THREE = window.THREE;
  * - Proximity-based character occlusion fade in tight corridors/corners
  */
 export class ThirdPersonCamera {
-  constructor(camera, player, scene, domElement) {
+  camera: PerspectiveCamera;
+  player: Player;
+  scene: Scene;
+  domElement: HTMLElement;
+
+  yaw: number;
+  pitch: number;
+  minPitch: number;
+  maxPitch: number;
+
+  normalOffset: Vector3;
+  aimOffset: Vector3;
+  currentOffset: Vector3;
+
+  normalFov: number;
+  aimFov: number;
+
+  // Configurable settings
+  invertY: boolean;
+  invertX: boolean;
+  sensitivityMultiplier: number;
+
+  isLocked: boolean;
+
+  constructor(camera: PerspectiveCamera, player: Player, scene: Scene, domElement: HTMLElement) {
     this.camera = camera;
     this.player = player;
     this.scene = scene;
@@ -22,8 +48,8 @@ export class ThirdPersonCamera {
     this.minPitch = -Math.PI / 3.0;
     this.maxPitch = Math.PI / 3.5;
 
-    this.normalOffset = new THREE.Vector3(0.65, 1.6, -2.4);
-    this.aimOffset = new THREE.Vector3(0.5, 1.5, -1.35);
+    this.normalOffset = new Vector3(0.65, 1.6, -2.4);
+    this.aimOffset = new Vector3(0.5, 1.5, -1.35);
     this.currentOffset = this.normalOffset.clone();
 
     this.normalFov = 70;
@@ -38,14 +64,14 @@ export class ThirdPersonCamera {
     this.setupPointerLock();
   }
 
-  setSettings(settings) {
+  setSettings(settings?: CameraSettings | null): void {
     if (!settings) return;
     if (typeof settings.invertY === 'boolean') this.invertY = settings.invertY;
     if (typeof settings.invertX === 'boolean') this.invertX = settings.invertX;
     if (typeof settings.sensitivity === 'number') this.sensitivityMultiplier = settings.sensitivity;
   }
 
-  setupPointerLock() {
+  setupPointerLock(): void {
     this.domElement.addEventListener('click', () => {
       if (!this.isLocked && !this.player.isDead) {
         this.domElement.requestPointerLock();
@@ -56,7 +82,7 @@ export class ThirdPersonCamera {
       this.isLocked = document.pointerLockElement === this.domElement;
     });
 
-    document.addEventListener('mousemove', (e) => {
+    document.addEventListener('mousemove', (e: MouseEvent) => {
       if (!this.isLocked || this.player.isDead) return;
 
       const baseSensitivity = 0.0022;
@@ -72,29 +98,29 @@ export class ThirdPersonCamera {
     });
   }
 
-  update(dt, colliders) {
+  update(dt: number, colliders: Box3[]): void {
     const targetOffset = this.player.isAiming ? this.aimOffset : this.normalOffset;
     const targetFov = this.player.isAiming ? this.aimFov : this.normalFov;
 
     this.currentOffset.lerp(targetOffset, dt * 10);
-    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, dt * 8);
+    this.camera.fov = MathUtils.lerp(this.camera.fov, targetFov, dt * 8);
     this.camera.updateProjectionMatrix();
 
-    const headPos = this.player.root.position.clone().add(new THREE.Vector3(0, 1.45, 0));
+    const headPos = this.player.root.position.clone().add(new Vector3(0, 1.45, 0));
 
     const rotOffset = this.currentOffset.clone();
-    rotOffset.applyAxisAngle(new THREE.Vector3(1, 0, 0), this.pitch);
-    rotOffset.applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
+    rotOffset.applyAxisAngle(new Vector3(1, 0, 0), this.pitch);
+    rotOffset.applyAxisAngle(new Vector3(0, 1, 0), this.yaw);
 
     const desiredCamPos = headPos.clone().add(rotOffset);
 
-    const rayDir = new THREE.Vector3().subVectors(desiredCamPos, headPos);
+    const rayDir = new Vector3().subVectors(desiredCamPos, headPos);
     const dist = rayDir.length();
     rayDir.normalize();
 
     let actualCamPos = desiredCamPos;
-    const hitPoint = new THREE.Vector3();
-    const ray = new THREE.Ray(headPos, rayDir);
+    const hitPoint = new Vector3();
+    const ray = new Ray(headPos, rayDir);
 
     for (let i = 0; i < colliders.length; i++) {
       const box = colliders[i];
@@ -112,7 +138,7 @@ export class ThirdPersonCamera {
     const distToHead = this.camera.position.distanceTo(headPos);
     const minFadeDist = 0.65;
     const maxFadeDist = 1.45;
-    const targetAlpha = THREE.MathUtils.clamp(
+    const targetAlpha = MathUtils.clamp(
       (distToHead - minFadeDist) / (maxFadeDist - minFadeDist),
       0.15,
       1.0
@@ -120,9 +146,9 @@ export class ThirdPersonCamera {
     this.player.setProximityOpacity(targetAlpha);
 
     const lookTarget = headPos.clone().add(
-      new THREE.Vector3(0, 0, 10)
-        .applyAxisAngle(new THREE.Vector3(1, 0, 0), this.pitch)
-        .applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw)
+      new Vector3(0, 0, 10)
+        .applyAxisAngle(new Vector3(1, 0, 0), this.pitch)
+        .applyAxisAngle(new Vector3(0, 1, 0), this.yaw)
     );
     this.camera.lookAt(lookTarget);
   }

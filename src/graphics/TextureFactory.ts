@@ -1,15 +1,15 @@
-const THREE = window.THREE;
+import { CanvasTexture, RepeatWrapping } from 'three';
 
 /**
  * Procedural Texture Generator
  * Generates all textures in runtime using HTML5 Canvas (Zero external image dependencies)
  */
 export class TextureFactory {
-  static createMetalWall() {
+  static createMetalWall(): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 512;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
 
     const grad = ctx.createLinearGradient(0, 0, 512, 512);
     grad.addColorStop(0, '#1a1d22');
@@ -27,7 +27,7 @@ export class TextureFactory {
     ctx.lineWidth = 2;
     ctx.strokeRect(20, 20, 472, 472);
 
-    const drawBolt = (x, y) => {
+    const drawBolt = (x: number, y: number) => {
       ctx.fillStyle = '#0a0c0e';
       ctx.beginPath();
       ctx.arc(x, y, 7, 0, Math.PI * 2);
@@ -53,17 +53,17 @@ export class TextureFactory {
       ctx.stroke();
     }
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
+    const tex = new CanvasTexture(canvas);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
     return tex;
   }
 
-  static createFloorGrate() {
+  static createFloorGrate(): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
 
     ctx.fillStyle = '#101216';
     ctx.fillRect(0, 0, 256, 256);
@@ -88,18 +88,18 @@ export class TextureFactory {
       }
     }
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
+    const tex = new CanvasTexture(canvas);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
     tex.repeat.set(2, 2);
     return tex;
   }
 
-  static createCeiling() {
+  static createCeiling(): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
 
     ctx.fillStyle = '#14171c';
     ctx.fillRect(0, 0, 256, 256);
@@ -114,18 +114,18 @@ export class TextureFactory {
     ctx.moveTo(128, 0); ctx.lineTo(128, 256);
     ctx.stroke();
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
+    const tex = new CanvasTexture(canvas);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
     tex.repeat.set(2, 2);
     return tex;
   }
 
-  static createHazardStripes(red = false) {
+  static createHazardStripes(red = false): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
 
     const color1 = red ? '#cc1111' : '#f59e0b';
     const color2 = '#111317';
@@ -145,17 +145,17 @@ export class TextureFactory {
       ctx.fill();
     }
 
-    const tex = new THREE.CanvasTexture(canvas);
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
+    const tex = new CanvasTexture(canvas);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
     return tex;
   }
 
-  static createSuitTexture() {
+  static createSuitTexture(): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
 
     ctx.fillStyle = '#5c4528';
     ctx.fillRect(0, 0, 256, 256);
@@ -178,14 +178,14 @@ export class TextureFactory {
       ctx.stroke();
     }
 
-    return new THREE.CanvasTexture(canvas);
+    return new CanvasTexture(canvas);
   }
 
-  static createNecroSkin() {
+  static createNecroSkin(): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
 
     ctx.fillStyle = '#83776e';
     ctx.fillRect(0, 0, 256, 256);
@@ -219,14 +219,14 @@ export class TextureFactory {
       ctx.stroke();
     }
 
-    return new THREE.CanvasTexture(canvas);
+    return new CanvasTexture(canvas);
   }
 
-  static createHoloAmmoCanvas(ammo, maxAmmo) {
+  static createHoloAmmoCanvas(ammo: number, maxAmmo: number): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 128;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d')!;
 
     ctx.clearRect(0, 0, 256, 128);
 
