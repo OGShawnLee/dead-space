@@ -30,43 +30,47 @@ import type { LimbMesh, LimbType } from '../types';
  * - Stasis Module temporal dilation (suspends mid-air leap and halves acrobatic velocities by 50%)
  */
 export class Leaper {
-  scene: Scene;
-  sound: SoundSystem;
-  gibList: GibPart[];
-  bloodSys: BloodParticleSystem;
+  type = 'leaper';
+  hp = 90;
+  isDead = false;
+  state: 'PATROL' | 'STALK' | 'WINDUP' | 'LUNGE' | 'ATTACK' = 'PATROL';
+  patrolTimer = 0;
+  patrolDir = Math.random() * Math.PI * 2;
 
-  type: string;
-  hp: number;
-  isDead: boolean;
-  state: 'PATROL' | 'STALK' | 'WINDUP' | 'LUNGE' | 'ATTACK';
-  patrolTimer: number;
-  patrolDir: number;
-
-  baseSpeed: number;
-  speed: number;
-  attackRange: number;
-  attackCooldown: number;
-  bleedOutTimer: number;
+  baseSpeed = 3.6;
+  speed = this.baseSpeed;
+  attackRange = 1.8;
+  attackCooldown = 0;
+  bleedOutTimer = 0;
 
   // Lunge mechanics
-  isLeaping: boolean;
-  lungeCooldown: number;
-  lungeWindupTimer: number;
-  lungeVel: Vector3;
+  isLeaping = false;
+  lungeCooldown = 0;
+  lungeWindupTimer = 0;
+  lungeVel = new Vector3();
 
   // Stasis Status
-  stasisTimer: number;
-  stasisFactor: number;
+  stasisTimer = 0;
+  stasisFactor = 0.5;
 
   // Limb Tracking
-  hasHead: boolean;
-  hasTail: boolean;
-  hasArmL: boolean;
-  hasArmR: boolean;
+  hasHead = true;
+  hasTail = true;
+  hasArmL = true;
+  hasArmR = true;
 
-  root: Group;
-  matSkin: MeshStandardMaterial;
-  matBlade: MeshStandardMaterial;
+  root = new Group();
+  matSkin = new MeshStandardMaterial({
+    map: TextureFactory.createNecroSkin(),
+    roughness: 0.65,
+    metalness: 0.2
+  });
+
+  matBlade = new MeshStandardMaterial({
+    color: 0x2d3748,
+    roughness: 0.25,
+    metalness: 0.85
+  });
 
   torsoMesh!: Mesh;
   headMesh!: Mesh;
@@ -78,62 +82,14 @@ export class Leaper {
   tailBladeMesh!: Mesh;
 
   constructor(
-    scene: Scene,
-    soundSystem: SoundSystem,
+    public scene: Scene,
+    public sound: SoundSystem,
     spawnPos: Vector3,
-    gibList: GibPart[],
-    bloodSys: BloodParticleSystem
+    public gibList: GibPart[],
+    public bloodSys: BloodParticleSystem
   ) {
-    this.scene = scene;
-    this.sound = soundSystem;
-    this.gibList = gibList;
-    this.bloodSys = bloodSys;
-
-    this.type = 'leaper';
-    this.hp = 90;
-    this.isDead = false;
-    this.state = 'PATROL'; // PATROL, STALK, WINDUP, LUNGE, ATTACK
-    this.patrolTimer = 0;
-    this.patrolDir = Math.random() * Math.PI * 2;
-
-    this.baseSpeed = 3.6;
-    this.speed = this.baseSpeed;
-    this.attackRange = 1.8;
-    this.attackCooldown = 0;
-    this.bleedOutTimer = 0;
-
-    // Lunge mechanics
-    this.isLeaping = false;
-    this.lungeCooldown = 0;
-    this.lungeWindupTimer = 0;
-    this.lungeVel = new Vector3();
-
-    // Stasis Status
-    this.stasisTimer = 0;
-    this.stasisFactor = 0.5;
-
-    // Limb Tracking
-    this.hasHead = true;
-    this.hasTail = true;
-    this.hasArmL = true;
-    this.hasArmR = true;
-
-    this.root = new Group();
     this.root.position.copy(spawnPos);
     this.scene.add(this.root);
-
-    this.matSkin = new MeshStandardMaterial({
-      map: TextureFactory.createNecroSkin(),
-      roughness: 0.65,
-      metalness: 0.2
-    });
-
-    this.matBlade = new MeshStandardMaterial({
-      color: 0x2d3748,
-      roughness: 0.25,
-      metalness: 0.85
-    });
-
     this.buildBody();
   }
 

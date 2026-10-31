@@ -13,54 +13,31 @@ import type { CameraSettings } from '../types';
  * - Proximity-based character occlusion fade in tight corridors/corners
  */
 export class ThirdPersonCamera {
-  camera: PerspectiveCamera;
-  player: Player;
-  scene: Scene;
-  domElement: HTMLElement;
+  yaw = 0;
+  pitch = 0;
+  minPitch = -Math.PI / 3.0;
+  maxPitch = Math.PI / 3.5;
 
-  yaw: number;
-  pitch: number;
-  minPitch: number;
-  maxPitch: number;
+  normalOffset = new Vector3(0.65, 1.6, -2.4);
+  aimOffset = new Vector3(0.5, 1.5, -1.35);
+  currentOffset = this.normalOffset.clone();
 
-  normalOffset: Vector3;
-  aimOffset: Vector3;
-  currentOffset: Vector3;
-
-  normalFov: number;
-  aimFov: number;
+  normalFov = 70;
+  aimFov = 50;
 
   // Configurable settings
-  invertY: boolean;
-  invertX: boolean;
-  sensitivityMultiplier: number;
+  invertY = false;
+  invertX = false;
+  sensitivityMultiplier = 1.0;
 
-  isLocked: boolean;
+  isLocked = false;
 
-  constructor(camera: PerspectiveCamera, player: Player, scene: Scene, domElement: HTMLElement) {
-    this.camera = camera;
-    this.player = player;
-    this.scene = scene;
-    this.domElement = domElement;
-
-    this.yaw = 0;
-    this.pitch = 0;
-    this.minPitch = -Math.PI / 3.0;
-    this.maxPitch = Math.PI / 3.5;
-
-    this.normalOffset = new Vector3(0.65, 1.6, -2.4);
-    this.aimOffset = new Vector3(0.5, 1.5, -1.35);
-    this.currentOffset = this.normalOffset.clone();
-
-    this.normalFov = 70;
-    this.aimFov = 50;
-
-    // Configurable settings
-    this.invertY = false;
-    this.invertX = false;
-    this.sensitivityMultiplier = 1.0;
-
-    this.isLocked = false;
+  constructor(
+    public camera: PerspectiveCamera,
+    public player: Player,
+    public scene: Scene,
+    public domElement: HTMLElement
+  ) {
     this.setupPointerLock();
   }
 

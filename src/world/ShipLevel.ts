@@ -30,36 +30,22 @@ export interface FlickerLightItem {
  * and collectible supply crates (Ammo, Medkits, Stasis Packs).
  */
 export class ShipLevel {
-  scene: Scene;
-  gridSize: number;
-  cellSize: number;
-  wallHeight: number;
-  colliders: Box3[];
-  flickerLights: FlickerLightItem[];
-  pickups: PickupItem[];
-  escapeZone: EscapeZone | null;
-  spawnPoints: Vector3[];
-
-  playerStart: Vector3;
+  gridSize = 17;
+  cellSize = 4;
+  wallHeight = 3.6;
+  colliders: Box3[] = [];
+  flickerLights: FlickerLightItem[] = [];
+  pickups: PickupItem[] = [];
+  escapeZone: EscapeZone | null = null;
+  spawnPoints: Vector3[] = [];
+  playerStart = new Vector3(0, 0, 0);
 
   matWall!: MeshStandardMaterial;
   matFloor!: MeshStandardMaterial;
   matCeiling!: MeshStandardMaterial;
   matEscape!: MeshStandardMaterial;
 
-  constructor(scene: Scene) {
-    this.scene = scene;
-    this.gridSize = 17;
-    this.cellSize = 4;
-    this.wallHeight = 3.6;
-    this.colliders = [];
-    this.flickerLights = [];
-    this.pickups = [];
-    this.escapeZone = null;
-    this.spawnPoints = [];
-
-    this.playerStart = new Vector3(0, 0, 0);
-
+  constructor(public scene: Scene) {
     this.initMaterials();
     this.buildLevel();
   }

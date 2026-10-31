@@ -5,21 +5,19 @@ import { Mesh, Vector3, type BufferGeometry, type Material, type Quaternion, typ
  * Physical debris representing severed limbs tumbling and bouncing on the floor.
  */
 export class GibPart {
-  scene: Scene;
   mesh: Mesh;
   velocity: Vector3;
   rotVel: Vector3;
-  life: number;
+  life = 12.0;
 
   constructor(
-    scene: Scene,
+    public scene: Scene,
     geometry: BufferGeometry,
     material: Material | Material[],
     worldPos: Vector3,
     worldQuat: Quaternion,
     initialVel: Vector3
   ) {
-    this.scene = scene;
     this.mesh = new Mesh(geometry, material);
     this.mesh.position.copy(worldPos);
     this.mesh.quaternion.copy(worldQuat);
@@ -35,7 +33,6 @@ export class GibPart {
       (Math.random() - 0.5) * 8,
       (Math.random() - 0.5) * 8
     );
-    this.life = 12.0;
   }
 
   update(dt: number): boolean {

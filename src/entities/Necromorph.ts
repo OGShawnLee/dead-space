@@ -28,38 +28,41 @@ import type { LimbMesh, LimbType } from '../types';
  * - Stasis Module temporal dilation (slows movement, attack, animations by 50%)
  */
 export class Necromorph {
-  scene: Scene;
-  sound: SoundSystem;
-  gibList: GibPart[];
-  bloodSys: BloodParticleSystem;
+  hp = 120;
+  isDead = false;
+  state: 'PATROL' | 'CHASE' = 'PATROL';
+  patrolTimer = 0;
+  patrolDir = Math.random() * Math.PI * 2;
 
-  hp: number;
-  isDead: boolean;
-  state: 'PATROL' | 'CHASE';
-  patrolTimer: number;
-  patrolDir: number;
-
-  baseSpeed: number;
-  speed: number;
-  attackRange: number;
-  attackCooldown: number;
-  bleedOutTimer: number;
+  baseSpeed = 3.6;
+  speed = this.baseSpeed;
+  attackRange = 1.65;
+  attackCooldown = 0;
+  bleedOutTimer = 0;
 
   // Stasis Status
-  stasisTimer: number;
-  stasisFactor: number;
+  stasisTimer = 0;
+  stasisFactor = 0.5;
 
   // Limb Status Tracking
-  hasHead: boolean;
-  hasArmL: boolean;
-  hasArmR: boolean;
-  hasLegL: boolean;
-  hasLegR: boolean;
-  isCrawling: boolean;
+  hasHead = true;
+  hasArmL = true;
+  hasArmR = true;
+  hasLegL = true;
+  hasLegR = true;
+  isCrawling = false;
 
-  root: Group;
-  matSkin: MeshStandardMaterial;
-  matBlade: MeshStandardMaterial;
+  root = new Group();
+  matSkin = new MeshStandardMaterial({
+    map: TextureFactory.createNecroSkin(),
+    roughness: 0.7,
+    metalness: 0.15
+  });
+  matBlade = new MeshStandardMaterial({
+    color: 0xd8c8b8,
+    roughness: 0.3,
+    metalness: 0.8
+  });
 
   torsoMesh!: Mesh;
   headMesh!: Mesh;
@@ -75,57 +78,14 @@ export class Necromorph {
   legRMesh!: Mesh;
 
   constructor(
-    scene: Scene,
-    soundSystem: SoundSystem,
+    public scene: Scene,
+    public sound: SoundSystem,
     spawnPos: Vector3,
-    gibList: GibPart[],
-    bloodSys: BloodParticleSystem
+    public gibList: GibPart[],
+    public bloodSys: BloodParticleSystem
   ) {
-    this.scene = scene;
-    this.sound = soundSystem;
-    this.gibList = gibList;
-    this.bloodSys = bloodSys;
-
-    this.hp = 120;
-    this.isDead = false;
-    this.state = 'PATROL';
-    this.patrolTimer = 0;
-    this.patrolDir = Math.random() * Math.PI * 2;
-
-    this.baseSpeed = 3.6;
-    this.speed = this.baseSpeed;
-    this.attackRange = 1.65;
-    this.attackCooldown = 0;
-    this.bleedOutTimer = 0;
-
-    // Stasis Status
-    this.stasisTimer = 0;
-    this.stasisFactor = 0.5;
-
-    // Limb Status Tracking
-    this.hasHead = true;
-    this.hasArmL = true;
-    this.hasArmR = true;
-    this.hasLegL = true;
-    this.hasLegR = true;
-    this.isCrawling = false;
-
-    this.root = new Group();
     this.root.position.copy(spawnPos);
     this.scene.add(this.root);
-
-    this.matSkin = new MeshStandardMaterial({
-      map: TextureFactory.createNecroSkin(),
-      roughness: 0.7,
-      metalness: 0.15
-    });
-
-    this.matBlade = new MeshStandardMaterial({
-      color: 0xd8c8b8,
-      roughness: 0.3,
-      metalness: 0.8
-    });
-
     this.buildDeformedBody();
   }
 

@@ -5,20 +5,16 @@ import type { InputState, InputHandlers } from '../types';
  * Manages keyboard, mouse buttons, aiming triggers, and contextual keybinds.
  */
 export class InputManager {
-  handlers: InputHandlers;
-  state: InputState;
+  state: InputState = {
+    forward: false,
+    backward: false,
+    strafeLeft: false,
+    strafeRight: false,
+    sprint: false,
+    aiming: false
+  };
 
-  constructor(handlers: InputHandlers = {}) {
-    this.handlers = handlers;
-    this.state = {
-      forward: false,
-      backward: false,
-      strafeLeft: false,
-      strafeRight: false,
-      sprint: false,
-      aiming: false
-    };
-
+  constructor(public handlers: InputHandlers = {}) {
     this.setupListeners();
   }
 

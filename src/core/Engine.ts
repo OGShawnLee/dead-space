@@ -52,42 +52,32 @@ export interface StasisProjectile {
  * Coordinates scene, rendering, update loop, combat raycasts, enemy variants, and state transitions.
  */
 export class DeadSpaceGame {
-  container: HTMLElement;
-  enemies: Enemy[];
-  gibs: GibPart[];
-  stasisProjectiles: StasisProjectile[];
-  statsKills: number;
-  statsLimbs: number;
-  isPaused: boolean;
-  gameWon: boolean;
-  settingsPreviousModal: 'start' | 'pause';
+  container = document.getElementById('game-container') as HTMLElement;
+  enemies: Enemy[] = [];
+  gibs: GibPart[] = [];
+  stasisProjectiles: StasisProjectile[] = [];
+  statsKills = 0;
+  statsLimbs = 0;
+  isPaused = false;
+  gameWon = false;
+  settingsPreviousModal: 'start' | 'pause' = 'start';
 
   scene!: Scene;
   camera!: PerspectiveCamera;
   renderer!: WebGLRenderer;
   ambientLight!: AmbientLight;
 
-  sound: SoundSystem;
-  level: ShipLevel;
-  bloodSys: BloodParticleSystem;
-  player: Player;
-  cameraController: ThirdPersonCamera;
-  settings: CameraSettings;
-  input: InputManager;
-  clock: Clock;
+  sound!: SoundSystem;
+  level!: ShipLevel;
+  bloodSys!: BloodParticleSystem;
+  player!: Player;
+  cameraController!: ThirdPersonCamera;
+  settings!: CameraSettings;
+  input!: InputManager;
+  clock = new Clock();
   promptTimeout?: ReturnType<typeof setTimeout>;
 
   constructor() {
-    this.container = document.getElementById('game-container') as HTMLElement;
-    this.enemies = [];
-    this.gibs = [];
-    this.stasisProjectiles = [];
-    this.statsKills = 0;
-    this.statsLimbs = 0;
-    this.isPaused = false;
-    this.gameWon = false;
-    this.settingsPreviousModal = 'start';
-
     this.initThree();
     this.sound = new SoundSystem();
     this.level = new ShipLevel(this.scene);
@@ -112,7 +102,6 @@ export class DeadSpaceGame {
     this.spawnEnemies();
     this.setupUI();
 
-    this.clock = new Clock();
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
   }

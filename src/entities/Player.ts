@@ -35,37 +35,34 @@ import type { InputState } from '../types';
  * - Camera proximity occlusion fade (becomes transparent when camera is close)
  */
 export class Player {
-  scene: Scene;
-  sound: SoundSystem;
-
-  maxHp: number;
-  hp: number;
-  medkits: number;
-  ammo: number;
-  maxAmmo: number;
-  reserveAmmo: number;
-  isDead: boolean;
+  maxHp = 100;
+  hp = 100;
+  medkits = 2;
+  ammo = 10;
+  maxAmmo = 10;
+  reserveAmmo = 30;
+  isDead = false;
 
   // Stasis Module (Suit Level 1: 3 charges, 50% slow)
-  stasisCharges: number;
-  maxStasisCharges: number;
-  stasisCooldown: number;
-  stasisAnimTimer: number;
+  stasisCharges = 3;
+  maxStasisCharges = 3;
+  stasisCooldown = 0;
+  stasisAnimTimer = 0;
 
-  isAiming: boolean;
-  isSprinting: boolean;
-  flashlightOn: boolean;
-  stepTimer: number;
-  heartbeatTimer: number;
-  currentOpacity: number;
+  isAiming = false;
+  isSprinting = false;
+  flashlightOn = true;
+  stepTimer = 0;
+  heartbeatTimer = 0;
+  currentOpacity = 1.0;
 
   // Movement speeds
-  walkSpeed: number;
-  sprintSpeed: number;
-  aimSpeed: number;
+  walkSpeed = 3.8;
+  sprintSpeed = 6.2;
+  aimSpeed = 2.2;
 
-  root: Group;
-  radius: number;
+  root = new Group();
+  radius = 0.5;
 
   suitGroup!: Group;
   torsoMesh!: Mesh<BoxGeometry, MeshStandardMaterial>;
@@ -87,40 +84,9 @@ export class Player {
   spotLight!: SpotLight;
   spotTarget!: Object3D;
 
-  constructor(scene: Scene, soundSystem: SoundSystem, startPos: Vector3) {
-    this.scene = scene;
-    this.sound = soundSystem;
-
-    this.maxHp = 100;
-    this.hp = 100;
-    this.medkits = 2;
-    this.ammo = 10;
-    this.maxAmmo = 10;
-    this.reserveAmmo = 30;
-    this.isDead = false;
-
-    // Stasis Module (Suit Level 1: 3 charges, 50% slow)
-    this.stasisCharges = 3;
-    this.maxStasisCharges = 3;
-    this.stasisCooldown = 0;
-    this.stasisAnimTimer = 0;
-
-    this.isAiming = false;
-    this.isSprinting = false;
-    this.flashlightOn = true;
-    this.stepTimer = 0;
-    this.heartbeatTimer = 0;
-    this.currentOpacity = 1.0;
-
-    // Movement speeds
-    this.walkSpeed = 3.8;
-    this.sprintSpeed = 6.2;
-    this.aimSpeed = 2.2;
-
-    this.root = new Group();
+  constructor(public scene: Scene, public sound: SoundSystem, startPos: Vector3) {
     this.root.position.copy(startPos);
     this.scene.add(this.root);
-    this.radius = 0.5;
 
     this.buildSuitMesh();
     this.buildPlasmaCutter();
@@ -393,12 +359,16 @@ export class Player {
     if (!this.stasisRingMat) return;
     if (this.stasisCharges >= 3) {
       this.stasisRingMat.color.setHex(0x00f0ff); // Full 3 charges: Brilliant cyan
+      this.stasisRingMat.needsUpdate = true;
     } else if (this.stasisCharges === 2) {
       this.stasisRingMat.color.setHex(0xff9900); // 2 charges: Amber orange
+      this.stasisRingMat.needsUpdate = true;
     } else if (this.stasisCharges === 1) {
       this.stasisRingMat.color.setHex(0xff2a2a); // 1 charge: Critical red
+      this.stasisRingMat.needsUpdate = true;
     } else {
       this.stasisRingMat.color.setHex(0x181e26); // 0 charges: Depleted dark
+      this.stasisRingMat.needsUpdate = true;
     }
   }
 

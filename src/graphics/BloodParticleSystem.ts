@@ -12,22 +12,13 @@ interface Particle {
  * Emits and manages visceral blood splatter bursts, floor stains, and volatile explosions.
  */
 export class BloodParticleSystem {
-  scene: Scene;
-  particles: Particle[];
-  pGeo: BoxGeometry;
-  pMat: MeshBasicMaterial;
-  stasisGeo: BoxGeometry;
-  stasisMat: MeshBasicMaterial;
+  particles: Particle[] = [];
+  pGeo = new BoxGeometry(0.06, 0.06, 0.06);
+  pMat = new MeshBasicMaterial({ color: 0x990000 });
+  stasisGeo = new BoxGeometry(0.04, 0.04, 0.04);
+  stasisMat = new MeshBasicMaterial({ color: 0x00f0ff });
 
-  constructor(scene: Scene) {
-    this.scene = scene;
-    this.particles = [];
-    this.pGeo = new BoxGeometry(0.06, 0.06, 0.06);
-    this.pMat = new MeshBasicMaterial({ color: 0x990000 });
-
-    this.stasisGeo = new BoxGeometry(0.04, 0.04, 0.04);
-    this.stasisMat = new MeshBasicMaterial({ color: 0x00f0ff });
-  }
+  constructor(public scene: Scene) {}
 
   spawnSplatter(pos: Vector3, normal: Vector3, count = 25): void {
     for (let i = 0; i < count; i++) {

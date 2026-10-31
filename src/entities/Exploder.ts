@@ -28,41 +28,48 @@ import type { LimbMesh, LimbType } from '../types';
  * - Stasis Module temporal dilation (slows running, detonation fuse, and animation by 50%)
  */
 export class Exploder {
-  scene: Scene;
-  sound: SoundSystem;
-  gibList: GibPart[];
-  bloodSys: BloodParticleSystem;
+  type = 'exploder';
+  hp = 100;
+  isDead = false;
+  exploded = false;
+  state: 'PATROL' | 'CHASE' = 'PATROL';
+  patrolTimer = 0;
+  patrolDir = Math.random() * Math.PI * 2;
 
-  type: string;
-  hp: number;
-  isDead: boolean;
-  exploded: boolean;
-  state: 'PATROL' | 'CHASE';
-  patrolTimer: number;
-  patrolDir: number;
-
-  baseSpeed: number;
-  speed: number;
-  explodeRange: number;
-  squealTimer: number;
-  fuseTimer: number;
-  isDetonating: boolean;
+  baseSpeed = 3.2; // Runs faster than regular Slasher
+  speed = this.baseSpeed;
+  explodeRange = 1.8;
+  squealTimer = 0;
+  fuseTimer = 0;
+  isDetonating = false;
 
   // Stasis Status
-  stasisTimer: number;
-  stasisFactor: number;
+  stasisTimer = 0;
+  stasisFactor = 0.5;
 
   // Limb Tracking
-  hasHead: boolean;
-  hasSac: boolean;
-  hasArmR: boolean;
-  hasLegL: boolean;
-  hasLegR: boolean;
-  isCrawling: boolean;
+  hasHead = true;
+  hasSac = true;
+  hasArmR = true;
+  hasLegL = true;
+  hasLegR = true;
+  isCrawling = false;
 
-  root: Group;
-  matSkin: MeshStandardMaterial;
-  matSac: MeshStandardMaterial;
+  root = new Group();
+  matSkin = new MeshStandardMaterial({
+    map: TextureFactory.createNecroSkin(),
+    roughness: 0.75,
+    metalness: 0.1
+  });
+
+  // Volatile glowing orange/yellow organic explosive material
+  matSac = new MeshStandardMaterial({
+    color: 0xffaa00,
+    emissive: 0xff5500,
+    emissiveIntensity: 0.85,
+    roughness: 0.2,
+    metalness: 0.1
+  });
 
   torsoMesh!: Mesh;
   headMesh!: Mesh;
@@ -80,63 +87,14 @@ export class Exploder {
   onExplosionCallback?: (blastCenter: Vector3, radius: number, damage: number, instigatedByPlayer: boolean) => void;
 
   constructor(
-    scene: Scene,
-    soundSystem: SoundSystem,
+    public scene: Scene,
+    public sound: SoundSystem,
     spawnPos: Vector3,
-    gibList: GibPart[],
-    bloodSys: BloodParticleSystem
+    public gibList: GibPart[],
+    public bloodSys: BloodParticleSystem
   ) {
-    this.scene = scene;
-    this.sound = soundSystem;
-    this.gibList = gibList;
-    this.bloodSys = bloodSys;
-
-    this.type = 'exploder';
-    this.hp = 100;
-    this.isDead = false;
-    this.exploded = false;
-    this.state = 'PATROL';
-    this.patrolTimer = 0;
-    this.patrolDir = Math.random() * Math.PI * 2;
-
-    this.baseSpeed = 3.2; // Runs faster than regular Slasher
-    this.speed = this.baseSpeed;
-    this.explodeRange = 1.8;
-    this.squealTimer = 0;
-    this.fuseTimer = 0;
-    this.isDetonating = false;
-
-    // Stasis Status
-    this.stasisTimer = 0;
-    this.stasisFactor = 0.5;
-
-    // Limb Tracking
-    this.hasHead = true;
-    this.hasSac = true;
-    this.hasArmR = true;
-    this.hasLegL = true;
-    this.hasLegR = true;
-    this.isCrawling = false;
-
-    this.root = new Group();
     this.root.position.copy(spawnPos);
     this.scene.add(this.root);
-
-    this.matSkin = new MeshStandardMaterial({
-      map: TextureFactory.createNecroSkin(),
-      roughness: 0.75,
-      metalness: 0.1
-    });
-
-    // Volatile glowing orange/yellow organic explosive material
-    this.matSac = new MeshStandardMaterial({
-      color: 0xffaa00,
-      emissive: 0xff5500,
-      emissiveIntensity: 0.85,
-      roughness: 0.2,
-      metalness: 0.1
-    });
-
     this.buildBody();
   }
 
