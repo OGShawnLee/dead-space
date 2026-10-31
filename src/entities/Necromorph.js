@@ -11,6 +11,7 @@ import { checkLineOfSight } from '../world/LineOfSight.js';
  * - Severing both arms completely DISARMS the enemy (0 attack damage, bleed-out)
  * - Severing both legs turns into crawler
  * - True Line of Sight (LoS) check through world obstacles (no wall-hacking)
+ * - Stasis Module temporal dilation (slows movement, attack, animations by 50%)
  */
 export class Necromorph {
   constructor(scene, soundSystem, spawnPos, gibList, bloodSys) {
@@ -25,11 +26,15 @@ export class Necromorph {
     this.patrolTimer = 0;
     this.patrolDir = Math.random() * Math.PI * 2;
 
-    this.baseSpeed = 2.6;
+    this.baseSpeed = 3.6;
     this.speed = this.baseSpeed;
     this.attackRange = 1.65;
     this.attackCooldown = 0;
     this.bleedOutTimer = 0;
+
+    // Stasis Status
+    this.stasisTimer = 0;
+    this.stasisFactor = 0.5;
 
     // Limb Status Tracking
     this.hasHead = true;
@@ -56,6 +61,11 @@ export class Necromorph {
     });
 
     this.buildDeformedBody();
+  }
+
+  applyStasis(duration = 5.0, factor = 0.5) {
+    this.stasisTimer = Math.max(this.stasisTimer, duration);
+    this.stasisFactor = factor;
   }
 
   buildDeformedBody() {
@@ -234,10 +244,24 @@ export class Necromorph {
   update(dt, player, colliders) {
     if (this.isDead) return;
 
-    this.attackCooldown -= dt;
+    let effectiveDt = dt;
+    if (this.stasisTimer > 0) {
+      this.stasisTimer -= dt;
+      effectiveDt = dt * this.stasisFactor;
+      if (Math.random() < 0.25 && this.bloodSys) {
+        const sparkPos = this.root.position.clone().add(new THREE.Vector3(
+          (Math.random() - 0.5) * 0.7,
+          Math.random() * 1.6,
+          (Math.random() - 0.5) * 0.7
+        ));
+        this.bloodSys.spawnStasisSparks(sparkPos, 3);
+      }
+    }
+
+    this.attackCooldown -= effectiveDt;
 
     if (!this.hasArmL && !this.hasArmR) {
-      this.bleedOutTimer -= dt;
+      this.bleedOutTimer -= effectiveDt;
       if (this.bleedOutTimer <= 0) {
         this.die();
         return;
@@ -275,7 +299,7 @@ export class Necromorph {
         this.state = 'CHASE';
         this.sound.playNecroGrowl(true);
       } else {
-        this.patrolTimer -= dt;
+        this.patrolTimer -= effectiveDt;
         if (this.patrolTimer <= 0) {
           this.patrolTimer = Math.random() * 3 + 2;
           this.patrolDir += (Math.random() - 0.5) * Math.PI;
@@ -289,7 +313,7 @@ export class Necromorph {
       this.root.rotation.y = angle;
 
       if (dist > this.attackRange) {
-        const moveStep = this.speed * dt;
+        const moveStep = this.speed * effectiveDt;
         const nextX = this.root.position.x + Math.sin(angle) * moveStep;
         const nextZ = this.root.position.z + Math.cos(angle) * moveStep;
 
@@ -306,7 +330,8 @@ export class Necromorph {
           this.root.position.z = nextZ;
         }
 
-        const t = Date.now() * 0.012;
+        const animSpeed = this.stasisTimer > 0 ? 0.006 : 0.012;
+        const t = Date.now() * animSpeed;
         if (!this.isCrawling) {
           if (this.hasLegL) this.legLGroup.rotation.x = Math.sin(t) * 0.6;
           if (this.hasLegR) this.legRGroup.rotation.x = -Math.sin(t) * 0.6;

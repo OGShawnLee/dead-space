@@ -389,6 +389,99 @@ export class SoundSystem {
     osc.stop(now + 0.44);
   }
 
+  playStasisFire() {
+    if (!this.initialized) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const mod = this.ctx.createOscillator();
+    const modGain = this.ctx.createGain();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1250, now);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.38);
+
+    mod.type = 'sine';
+    mod.frequency.setValueAtTime(45, now);
+    mod.frequency.linearRampToValueAtTime(12, now + 0.38);
+    modGain.gain.setValueAtTime(220, now);
+    modGain.gain.linearRampToValueAtTime(10, now + 0.38);
+
+    gain.gain.setValueAtTime(0.75, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+    mod.connect(modGain);
+    modGain.connect(osc.frequency);
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+
+    mod.start(now);
+    osc.start(now);
+    mod.stop(now + 0.42);
+    osc.stop(now + 0.42);
+  }
+
+  playStasisHit() {
+    if (!this.initialized) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(280, now);
+    osc.frequency.exponentialRampToValueAtTime(95, now + 0.55);
+
+    gain.gain.setValueAtTime(0.65, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.62);
+
+    const bufferSize = Math.floor(this.ctx.sampleRate * 0.35);
+    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.4));
+    }
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = this.ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(1800, now);
+    filter.Q.setValueAtTime(6, now);
+
+    const noiseGain = this.ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.5, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+    noise.connect(filter);
+    filter.connect(noiseGain);
+    noiseGain.connect(this.masterGain);
+    noise.start(now);
+  }
+
+  playStasisEmpty() {
+    if (!this.initialized) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(160, now);
+    osc.frequency.setValueAtTime(80, now + 0.08);
+
+    gain.gain.setValueAtTime(0.35, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+
+    osc.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + 0.18);
+  }
+
   startAmbientDrone() {
     if (!this.initialized || this.droneOsc) return;
     const now = this.ctx.currentTime;

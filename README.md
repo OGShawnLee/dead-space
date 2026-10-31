@@ -9,7 +9,8 @@
 2. [Key Features](#-key-features)
 3. [Modular Architecture (ES Modules)](#-modular-architecture-es-modules)
 4. [Gameplay Mechanics](#-gameplay-mechanics)
-   - [Diegetic Interface (3D RIG Spine & Holograms)](#diegetic-interface-3d-rig-spine--holograms)
+   - [Diegetic Interface (3D RIG Spine, Stasis Meter & Holograms)](#diegetic-interface-3d-rig-spine-stasis-meter--holograms)
+   - [Stasis Module (Temporal Dilatation)](#stasis-module-temporal-dilatation)
    - [Surgical Dismemberment Combat](#surgical-dismemberment-combat)
    - [Sensory Enemy AI & Line of Sight (LoS)](#sensory-enemy-ai--line-of-sight-los)
    - [Over-The-Shoulder Camera Controller](#over-the-shoulder-camera-controller)
@@ -22,7 +23,7 @@
 
 ## 🌌 Overview & Design Philosophy
 
-The player embodies an engineer trapped in the suffocating, dark corridors of an abandoned deep-space mining vessel overrun by mutated biomechanical creatures known as **Necromorphs**. The objective is to scavenge for resources (plasma cells and medkits), survive aggressive ambushes, and navigate through the ship's labyrinth to the **Escape Shuttle Airlock**.
+The player embodies an engineer trapped in the suffocating, dark corridors of an abandoned deep-space mining vessel overrun by mutated biomechanical creatures known as **Necromorphs**. The objective is to scavenge for resources (plasma cells, medkits, and stasis packs), survive aggressive ambushes, and navigate through the ship's labyrinth to the **Escape Shuttle Airlock**.
 
 ### Strict Architectural Principles:
 - **Zero External Assets**: No 3D model files (`.gltf`, `.obj`) or downloaded raster images (`.png`, `.jpg`). Everything is built from **primitive geometries** (boxes, cylinders, cones, planes) and procedurally generated textures crafted at runtime via HTML5 `CanvasTexture`.
@@ -34,7 +35,8 @@ The player embodies an engineer trapped in the suffocating, dark corridors of an
 ## ⚡ Key Features
 
 - **Strategic Dismemberment**: Center-mass shots to the torso deal negligible damage. Severing arms, scythe blades, and legs is the only effective way to neutralize threats.
-- **True 3D Extruded RIG Spine**: Isaac's signature health bar is modeled as an extruded 3D cybernetic column on his back with 6 illuminated vertebrae that shift colors (Cyan $\rightarrow$ Amber $\rightarrow$ Pulsing Alert Red) and cast a real-time point-light aura onto his suit.
+- **True 3D Extruded RIG Spine & Stasis Ring**: Isaac's signature health bar is modeled as an extruded 3D cybernetic column on his back with 6 illuminated vertebrae that shift colors (Cyan $\rightarrow$ Amber $\rightarrow$ Pulsing Alert Red). Next to it on his right shoulder blade is the diegetic circular **Stasis Meter** tracking charges (3 charges = Cyan, 2 = Amber, 1 = Flashing Red, 0 = Depleted).
+- **Stasis Module**: Slow-motion projectile fired from Isaac's left hand that dilates time for struck enemies by $50\%$ for 5 seconds, enabling tactical dismemberment of charging Exploders and acrobatic Leapers mid-air.
 - **Floating Holographic Ammo Display**: Semi-transparent cyan HUD plane projected directly above the Plasma Cutter displaying live clip capacity and reserve cells.
 - **Realistic Sensory AI (No Wall-Hacking)**: Necromorphs respect physical geometry through raycast Line-of-Sight (LoS) checks. They detect Isaac via direct sightlines, loud gunshot acoustics, or flashlight illumination.
 - **Procedural Ship Labyrinth**: 2D grid-based dungeon extruded into 3D corridors featuring metallic floor grates, overhead conduits, flickering emergency lights, and claustrophobic volumetric fog.
@@ -53,35 +55,47 @@ dead-space/
 ├── README.md                    # Comprehensive project documentation
 └── src/
     ├── core/
-    │   ├── Engine.js            # Main loop, Three.js scene, renderer, combat raycasting
+    │   ├── Engine.js            # Main loop, Three.js scene, renderer, combat raycasting, stasis projectiles
     │   ├── InputManager.js      # Decoupled keyboard, mouse, and pointer-lock event handling
     │   └── SoundSystem.js       # Real-time procedural audio synthesizer (Web Audio API)
     ├── graphics/
     │   ├── TextureFactory.js    # Procedural CanvasTextures (metal plates, grates, flesh, holo)
-    │   └── BloodParticleSystem.js # Real-time blood splatter particle pool and floor stains
+    │   └── BloodParticleSystem.js # Real-time blood splatter, explosions, and stasis spark particle pool
     ├── world/
-    │   ├── ShipLevel.js         # 3D labyrinth generator, colliders, lights, escape zone
+    │   ├── ShipLevel.js         # 3D labyrinth generator, colliders, lights, pickups (Ammo, Medkit, Stasis)
     │   ├── LineOfSight.js       # Obstacle raycasting check preventing wall-cheating
     │   └── GibPart.js           # Kinematic physics for severed limb debris
     ├── entities/
-    │   ├── Player.js            # Isaac Clarke: 3D RIG spine, flashlight, Plasma Cutter
-    │   └── Necromorph.js        # Slasher enemy: limb hierarchy, 1-shot cuts, disarming
+    │   ├── Player.js            # Isaac Clarke: 3D RIG spine, stasis meter, flashlight, Plasma Cutter
+    │   ├── Necromorph.js        # Slasher enemy: limb hierarchy, 1-shot cuts, disarming, stasis slow
+    │   ├── Exploder.js          # Exploder enemy: volatile rectangular sac, crawling, suicide blast
+    │   └── Leaper.js            # Leaper enemy: quadruped acrobatics, spinal scythe, mid-air freeze
     └── camera/
-        └── ThirdPersonCamera.js # Over-the-shoulder smoothed camera with anti-clipping
+        └── ThirdPersonCamera.js # Over-the-shoulder smoothed camera with proximity occlusion fade
 ```
 
 ---
 
 ## 🕹️ Gameplay Mechanics
 
-### Diegetic Interface (3D RIG Spine & Holograms)
+### Diegetic Interface (3D RIG Spine, Stasis Meter & Holograms)
 In true *Dead Space* tradition, essential survival data is integrated seamlessly into the game world:
 1. **Physical RIG Spine**: 6 prominent 3D vertebrae mounted along Isaac's spinal bracket.
    - **$100\% - 75\%$**: Vibrant Neon Cyan (`#00f0ff`).
    - **$74\% - 40\%$**: Warning Amber (`#ff9900`).
    - **$< 25\%$**: Flashing Emergency Red (`#ff1a1a`), accompanied by acoustic sub-bass heartbeats.
-2. **Back Aura PointLight**: Casts a colored glow onto Isaac's neck, shoulders, and the ground behind him, visually communicating health status at a glance.
+2. **Circular Stasis Meter (Shoulder Blade)**:
+   - **3 Charges**: Vibrant Cyan (`#00f0ff`).
+   - **2 Charges**: Warning Amber (`#ff9900`).
+   - **1 Charge**: Flashing Critical Red (`#ff2a2a`).
+   - **0 Charges**: Dark / Depleted (`#181e26`).
 3. **Weapon Ammo Hologram**: Diegetic digital readout attached to the Plasma Cutter showing `clip / reserve`.
+
+### Stasis Module (Temporal Dilatation)
+- **Aim-Only Trigger**: Isaac can only activate Stasis while aiming with <kbd>Right Click</kbd>. Pressing <kbd>C</kbd>, <kbd>E</kbd>, or <kbd>Middle Mouse Button</kbd> causes Isaac to thrust his left arm forward with an open-palm gesture, discharging an ionized stasis projectile.
+- **50% Velocity Dilation**: Reduces enemy movement, leap velocity, crawl speed, attack timers, and detonation windup by $50\%$ for 5.0 seconds.
+- **Area-of-Effect Field**: Impacting an enemy creates a 2.2m stasis shockwave that slows down clustered Necromorphs.
+- **Resource Management**: 3 charges max for Suit Level 1. Refilled by collecting blue C.E.C. Stasis Battery packs.
 
 ### Surgical Dismemberment Combat
 Each Necromorph features an independent hitbox hierarchy:
@@ -102,14 +116,7 @@ Each Necromorph features an independent hitbox hierarchy:
 ### Over-The-Shoulder Camera Controller
 - Smoothed camera follower offset behind Isaac's right shoulder.
 - **Aim Mode**: Holding Right Click brings the camera tighter to the shoulder, reduces FOV from $70^\circ$ to $50^\circ$, slows movement for precision, and projects the guide laser.
-- **Anti-Clipping Protection**: A reverse raycast from the player's head prevents the camera from penetrating corridor walls.
-
-### Procedural Audio Engine (Web Audio API)
-- **Plasma Cutter Discharge**: Downward frequency sweep ($1100\text{ Hz}$ to $70\text{ Hz}$) on a sawtooth wave combined with bandpass-filtered noise simulating gas ionization.
-- **Metallic Reload**: Two-stage mechanical clinks ($1400\text{ Hz}$ and $520\text{ Hz}$).
-- **Visceral Dismemberment**: Heavy bone snap transient ($320\text{ Hz}$) coupled with low-passed tearing noise.
-- **Necromorph Growls & Shrieks**: FM synthesis with $40\text{ Hz}$ modulation and sharp pitch drops upon aggro.
-- **Heartbeat Monitor**: Sub-bass double thump (*lub-dub*) that dynamically accelerates as Isaac's health falls below $40\%$.
+- **Proximity Occlusion Fade**: In tight corridors or corners where walls push the camera near Isaac, his suit progressively fades to $15\%$ opacity so the reticle is never obstructed.
 
 ---
 
@@ -121,6 +128,7 @@ Each Necromorph features an independent hitbox hierarchy:
 | <kbd>Mouse</kbd> | Rotate body (Y-axis) & adjust camera pitch |
 | <kbd>Right Click (Hold)</kbd> | Aim mode (over-the-shoulder zoom + laser sight) |
 | <kbd>Left Click</kbd> | Fire Plasma Cutter |
+| <kbd>C</kbd> / <kbd>E</kbd> / <kbd>Middle Click</kbd> | Fire Stasis Module (While Aiming) |
 | <kbd>Left Shift</kbd> | Sprint |
 | <kbd>R</kbd> | Reload Plasma Cutter magazine |
 | <kbd>Q</kbd> | Inject Medkit (+50 RIG Health) |
@@ -133,27 +141,22 @@ Each Necromorph features an independent hitbox hierarchy:
 
 Because the project relies on **native JavaScript ES Modules** (`import` / `export`), modern browsers enforce CORS security policies that block execution via direct double-click (`file:///`). It must be served through a local HTTP server.
 
-### Option 1: Python (Standard & Built-in)
-Open a terminal in the project directory and run:
+### Option 1: Bun / Vite (Fastest)
+```bash
+bun run dev
+```
+
+### Option 2: Python (Standard & Built-in)
 ```bash
 python -m http.server 8080
 ```
-Then navigate to: **[http://localhost:8080](http://localhost:8080)**.
-
-### Option 2: Node.js
-```bash
-npx serve .
-```
-
-### Option 3: VS Code Live Server
-Install the **Live Server** extension, right-click `index.html`, and choose **"Open with Live Server"**.
 
 ---
 
 ## 🛠️ Roadmap
 
 Upcoming experimental features and mechanics:
-- [ ] **Stasis Module**: Slow-motion projectile freezing enemies to $10\%$ speed for 5 seconds.
+- [x] **Stasis Module**: Slow-motion projectile freezing enemies to $50\%$ speed for 5 seconds (Level 1 Suit module with 3 charges and diegetic RIG back gauge).
 - [ ] **Isaac's Stomp**: Heavy melee foot-stomp with <kbd>Space</kbd> to crush crawling enemies and crack supply crates.
 - [ ] **Plasma Cutter Rotation**: Toggle horizontal vs. vertical emitter orientation with <kbd>T</kbd>.
 - [x] **New Necromorph Variants**:

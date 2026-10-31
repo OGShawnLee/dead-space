@@ -13,6 +13,7 @@ import { checkLineOfSight } from '../world/LineOfSight.js';
  * - High-speed slashing attacks when pinned or landing
  * - Dismemberment architecture matching Necromorph.js (head decapitation, bleed-out, proper GibPart creation)
  * - Strict wall collision handling during leaps to prevent sticking in walls
+ * - Stasis Module temporal dilation (suspends mid-air leap and halves acrobatic velocities by 50%)
  */
 export class Leaper {
   constructor(scene, soundSystem, spawnPos, gibList, bloodSys) {
@@ -40,6 +41,10 @@ export class Leaper {
     this.lungeWindupTimer = 0;
     this.lungeVel = new THREE.Vector3();
 
+    // Stasis Status
+    this.stasisTimer = 0;
+    this.stasisFactor = 0.5;
+
     // Limb Tracking
     this.hasHead = true;
     this.hasTail = true;
@@ -63,6 +68,11 @@ export class Leaper {
     });
 
     this.buildBody();
+  }
+
+  applyStasis(duration = 5.0, factor = 0.5) {
+    this.stasisTimer = Math.max(this.stasisTimer, duration);
+    this.stasisFactor = factor;
   }
 
   tagLimb(mesh, type, hp) {
@@ -238,11 +248,25 @@ export class Leaper {
   update(dt, player, colliders) {
     if (this.isDead) return;
 
-    this.attackCooldown -= dt;
-    this.lungeCooldown -= dt;
+    let effectiveDt = dt;
+    if (this.stasisTimer > 0) {
+      this.stasisTimer -= dt;
+      effectiveDt = dt * this.stasisFactor;
+      if (Math.random() < 0.25 && this.bloodSys) {
+        const sparkPos = this.root.position.clone().add(new THREE.Vector3(
+          (Math.random() - 0.5) * 0.7,
+          Math.random() * 0.9,
+          (Math.random() - 0.5) * 0.7
+        ));
+        this.bloodSys.spawnStasisSparks(sparkPos, 3);
+      }
+    }
+
+    this.attackCooldown -= effectiveDt;
+    this.lungeCooldown -= effectiveDt;
 
     if (this.bleedOutTimer > 0) {
-      this.bleedOutTimer -= dt;
+      this.bleedOutTimer -= effectiveDt;
       if (this.bleedOutTimer <= 0) {
         this.die();
         return;
@@ -257,8 +281,8 @@ export class Leaper {
 
     // Mid-air leap physics with robust wall collision detection
     if (this.isLeaping) {
-      this.lungeVel.y -= 14.0 * dt; // Gravity
-      const moveStep = this.lungeVel.clone().multiplyScalar(dt);
+      this.lungeVel.y -= 14.0 * effectiveDt; // Gravity slowed down by stasis
+      const moveStep = this.lungeVel.clone().multiplyScalar(effectiveDt);
       const nextPos = this.root.position.clone().add(moveStep);
 
       // Check wall intersection during mid-air trajectory
@@ -297,7 +321,7 @@ export class Leaper {
       }
 
       // Leaping roll animation
-      if (this.torsoMesh) this.torsoMesh.rotation.x += dt * 3.0;
+      if (this.torsoMesh) this.torsoMesh.rotation.x += effectiveDt * 3.0;
 
       // Check landing or collision with player
       if (this.root.position.y <= 0.05) {
@@ -327,13 +351,13 @@ export class Leaper {
         this.state = 'STALK';
         this.sound.playLeaperScreech();
       } else {
-        this.patrolTimer -= dt;
+        this.patrolTimer -= effectiveDt;
         if (this.patrolTimer <= 0) {
           this.patrolTimer = Math.random() * 3.0 + 2.0;
           this.patrolDir = Math.random() * Math.PI * 2;
         }
 
-        const moveVec = new THREE.Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar(1.2 * dt);
+        const moveVec = new THREE.Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar(1.2 * effectiveDt);
         const nextPos = this.root.position.clone().add(moveVec);
 
         const testBox = new THREE.Box3(
@@ -378,7 +402,7 @@ export class Leaper {
 
       // Crawl towards player
       toPlayer.normalize();
-      const moveStep = toPlayer.clone().multiplyScalar(this.speed * dt);
+      const moveStep = toPlayer.clone().multiplyScalar(this.speed * effectiveDt);
       const nextPos = this.root.position.clone().add(moveStep);
 
       const testBox = new THREE.Box3(
@@ -399,7 +423,8 @@ export class Leaper {
       }
 
       // Scuttling arm gait
-      const scuttle = Math.sin(Date.now() * 0.018) * 0.5;
+      const scuttleSpeed = this.stasisTimer > 0 ? 0.009 : 0.018;
+      const scuttle = Math.sin(Date.now() * scuttleSpeed) * 0.5;
       if (this.hasArmL && this.armLGroup) this.armLGroup.rotation.x = scuttle;
       if (this.hasArmR && this.armRGroup) this.armRGroup.rotation.x = -scuttle;
 
@@ -408,7 +433,7 @@ export class Leaper {
       this.root.rotation.y = Math.atan2(toPlayer.x, toPlayer.z);
 
       if (this.torsoMesh) this.torsoMesh.position.y = 0.35;
-      this.lungeWindupTimer -= dt;
+      this.lungeWindupTimer -= effectiveDt;
 
       if (this.lungeWindupTimer <= 0) {
         // Launch into air!

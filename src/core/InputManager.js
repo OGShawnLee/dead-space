@@ -34,6 +34,10 @@ export class InputManager {
         case 'KeyQ':
           if (this.handlers.onHeal) this.handlers.onHeal();
           break;
+        case 'KeyC':
+        case 'KeyE':
+          if (this.handlers.onStasis) this.handlers.onStasis();
+          break;
         case 'Escape':
           if (this.handlers.onTogglePause) this.handlers.onTogglePause();
           break;
@@ -56,6 +60,9 @@ export class InputManager {
         if (this.handlers.onAimChange) this.handlers.onAimChange(true);
       } else if (e.button === 0) {
         if (this.handlers.onShoot) this.handlers.onShoot();
+      } else if (e.button === 1) {
+        // Middle mouse button activates Stasis
+        if (this.handlers.onStasis) this.handlers.onStasis();
       }
     });
 

@@ -10,6 +10,9 @@ export class BloodParticleSystem {
     this.particles = [];
     this.pGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
     this.pMat = new THREE.MeshBasicMaterial({ color: 0x990000 });
+
+    this.stasisGeo = new THREE.BoxGeometry(0.04, 0.04, 0.04);
+    this.stasisMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
   }
 
   spawnSplatter(pos, normal, count = 25) {
@@ -69,11 +72,37 @@ export class BloodParticleSystem {
     }, 140);
   }
 
+  spawnStasisSparks(pos, count = 20) {
+    for (let i = 0; i < count; i++) {
+      const p = new THREE.Mesh(this.stasisGeo, this.stasisMat);
+      p.position.copy(pos);
+      this.scene.add(p);
+
+      const speed = Math.random() * 3.2 + 0.8;
+      const angleH = Math.random() * Math.PI * 2;
+      const angleV = (Math.random() - 0.5) * Math.PI;
+
+      const vel = new THREE.Vector3(
+        Math.cos(angleH) * Math.cos(angleV) * speed,
+        Math.sin(angleV) * speed + 0.5,
+        Math.sin(angleH) * Math.cos(angleV) * speed
+      );
+
+      this.particles.push({
+        mesh: p,
+        vel: vel,
+        life: Math.random() * 0.45 + 0.25,
+        gravityScale: 0.3 // Stasis sparks linger / float with low gravity
+      });
+    }
+  }
+
   update(dt) {
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.life -= dt;
-      p.vel.y -= 9.8 * dt;
+      const grav = 9.8 * (p.gravityScale !== undefined ? p.gravityScale : 1.0);
+      p.vel.y -= grav * dt;
       p.mesh.position.addScaledVector(p.vel, dt);
 
       if (p.mesh.position.y < 0.04) {

@@ -5,10 +5,11 @@ import { TextureFactory } from '../graphics/TextureFactory.js';
  * Isaac Clarke Player Entity
  * Features:
  * - 3D Prominent RIG Spinal Bar with 6 individual glowing neon vertebrae
- * - Back aura point light & Stasis meter
+ * - Back aura point light & Stasis meter (3 charges: Cyan -> Amber -> Red -> Dark)
  * - Plasma Cutter weapon rig with floating holographic ammo
  * - Shoulder-mounted high-intensity flashlight
  * - Smooth WASD movement, sprint, aiming posture, health/damage/healing
+ * - Stasis Module left-arm thrust discharge
  * - Camera proximity occlusion fade (becomes transparent when camera is close)
  */
 export class Player {
@@ -23,6 +24,12 @@ export class Player {
     this.maxAmmo = 10;
     this.reserveAmmo = 30;
     this.isDead = false;
+
+    // Stasis Module (Suit Level 1: 3 charges, 50% slow)
+    this.stasisCharges = 3;
+    this.maxStasisCharges = 3;
+    this.stasisCooldown = 0;
+    this.stasisAnimTimer = 0;
 
     this.isAiming = false;
     this.isSprinting = false;
@@ -45,6 +52,7 @@ export class Player {
     this.buildPlasmaCutter();
     this.buildFlashlight();
     this.updateRigSpine();
+    this.updateStasisMeter();
   }
 
   buildSuitMesh() {
@@ -88,10 +96,10 @@ export class Player {
     const visorMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
     for (let i = 0; i < 3; i++) {
       const slit = new THREE.Mesh(
-        new THREE.BoxGeometry(0.26, 0.035, 0.05),
+        new THREE.BoxGeometry(0.24, 0.025, 0.05),
         visorMat
       );
-      slit.position.set(0, 1.76 - i * 0.06, 0.21);
+      slit.position.set(0, 1.74 - i * 0.05, 0.215);
       this.suitGroup.add(slit);
     }
 
@@ -110,12 +118,13 @@ export class Player {
 
     // 6 Segmented 3D vertebrae with distinct neon glow
     this.rigSegments = [];
-    const segH = 0.075;
-    const segGap = 0.02;
+    const numSegments = 6;
+    const segH = 0.07;
+    const segGap = 0.025;
     const startY = 0.88;
 
-    for (let i = 0; i < 6; i++) {
-      const segGeo = new THREE.BoxGeometry(0.11, segH, 0.08);
+    for (let i = 0; i < numSegments; i++) {
+      const segGeo = new THREE.BoxGeometry(0.09, segH, 0.12);
       const segMat = new THREE.MeshBasicMaterial({
         color: 0x00f0ff
       });
@@ -126,13 +135,14 @@ export class Player {
     }
 
     // Circular Stasis Meter on right shoulder blade
-    const stasisRing = new THREE.Mesh(
+    this.stasisRingMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+    this.stasisRing = new THREE.Mesh(
       new THREE.CylinderGeometry(0.065, 0.065, 0.04, 16),
-      new THREE.MeshBasicMaterial({ color: 0x00e5ff })
+      this.stasisRingMat
     );
-    stasisRing.rotation.x = Math.PI / 2;
-    stasisRing.position.set(0.18, 1.4, -0.32);
-    this.suitGroup.add(stasisRing);
+    this.stasisRing.rotation.x = Math.PI / 2;
+    this.stasisRing.position.set(0.18, 1.4, -0.32);
+    this.suitGroup.add(this.stasisRing);
 
     // Dedicated Neon Back Light for the RIG Spine Aura
     this.rigBackLight = new THREE.PointLight(0x00f0ff, 1.5, 2.5);
@@ -159,6 +169,25 @@ export class Player {
     this.suitGroup.add(this.armR);
   }
 
+  setProximityOpacity(targetOpacity) {
+    if (Math.abs(this.currentOpacity - targetOpacity) < 0.01) return;
+    this.currentOpacity = targetOpacity;
+
+    const applyOpacity = (obj) => {
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        mats.forEach(mat => {
+          mat.transparent = targetOpacity < 0.99;
+          mat.opacity = targetOpacity;
+          mat.needsUpdate = true;
+        });
+      }
+    };
+
+    if (this.suitGroup) this.suitGroup.traverse(applyOpacity);
+    if (this.weaponGroup) this.weaponGroup.traverse(applyOpacity);
+  }
+
   buildPlasmaCutter() {
     this.weaponGroup = new THREE.Group();
     this.weaponGroup.position.set(0.48, 1.05, 0.35);
@@ -180,31 +209,43 @@ export class Player {
     emitter.position.set(0, 0, 0.24);
     this.weaponGroup.add(emitter);
 
+    // Floating Holographic Ammo Counter Screen (Dead Space diegetic UI)
     this.ammoCanvas = TextureFactory.createHoloAmmoCanvas(this.ammo, this.maxAmmo);
     this.ammoTexture = new THREE.CanvasTexture(this.ammoCanvas);
-    const holoGeo = new THREE.PlaneGeometry(0.52, 0.27);
-    this.holoMaterial = new THREE.MeshBasicMaterial({
+    this.ammoTexture.magFilter = THREE.LinearFilter;
+    this.ammoTexture.minFilter = THREE.LinearFilter;
+
+    const holoScreenGeo = new THREE.PlaneGeometry(0.26, 0.13);
+    const holoScreenMat = new THREE.MeshBasicMaterial({
       map: this.ammoTexture,
       transparent: true,
-      opacity: 0.92,
+      opacity: 0.95,
       side: THREE.DoubleSide
     });
-    this.holoAmmoMesh = new THREE.Mesh(holoGeo, this.holoMaterial);
-    this.holoAmmoMesh.position.set(0.28, 0.24, -0.05);
-    this.holoAmmoMesh.rotation.y = -Math.PI / 6;
-    this.weaponGroup.add(this.holoAmmoMesh);
+    this.holoScreen = new THREE.Mesh(holoScreenGeo, holoScreenMat);
+    this.holoScreen.position.set(0.14, 0.16, -0.06);
+    this.holoScreen.rotation.y = -Math.PI / 3.8;
+    this.holoScreen.rotation.x = -Math.PI / 12;
+    this.weaponGroup.add(this.holoScreen);
 
+    // Subtle cyan holographic glow light
+    const holoLight = new THREE.PointLight(0x00e5ff, 0.4, 0.8);
+    holoLight.position.copy(this.holoScreen.position);
+    this.weaponGroup.add(holoLight);
+
+    // 3 Aiming Lasers
     const laserMat = new THREE.LineBasicMaterial({
       color: 0x00f0ff,
+      linewidth: 2,
       transparent: true,
-      opacity: 0.7,
-      linewidth: 2
+      opacity: 0.85
     });
-    const laserGeo = new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(0, 0, 0.24),
+    const laserGeom = new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(0, 0, 0),
       new THREE.Vector3(0, 0, 25)
     ]);
-    this.laserLine = new THREE.Line(laserGeo, laserMat);
+    this.laserLine = new THREE.Line(laserGeom, laserMat);
+    this.laserLine.position.set(0, 0, 0.24);
     this.laserLine.visible = false;
     this.weaponGroup.add(this.laserLine);
 
@@ -212,90 +253,105 @@ export class Player {
   }
 
   buildFlashlight() {
-    this.spotLight = new THREE.SpotLight(0xf0f6ff, 3.2, 30, Math.PI / 6.5, 0.35, 1.2);
-    this.spotLight.position.set(0.35, 1.55, 0.2);
+    this.spotLight = new THREE.SpotLight(0xd4e9ff, 4.5, 30, Math.PI / 6, 0.35, 1.2);
+    this.spotLight.position.set(0.28, 1.62, 0.15);
     this.spotLight.castShadow = true;
+    this.spotLight.shadow.mapSize.width = 1024;
+    this.spotLight.shadow.mapSize.height = 1024;
+    this.spotLight.shadow.camera.near = 0.5;
+    this.spotLight.shadow.camera.far = 30;
 
-    this.lightTarget = new THREE.Object3D();
-    this.lightTarget.position.set(0.35, 1.55, 15);
-    this.root.add(this.lightTarget);
-    this.spotLight.target = this.lightTarget;
+    this.spotTarget = new THREE.Object3D();
+    this.spotTarget.position.set(0.28, 1.62, 10);
+    this.root.add(this.spotTarget);
+    this.spotLight.target = this.spotTarget;
 
-    this.root.add(this.spotLight);
+    this.suitGroup.add(this.spotLight);
   }
 
   toggleFlashlight() {
     this.flashlightOn = !this.flashlightOn;
-    this.spotLight.intensity = this.flashlightOn ? 3.2 : 0;
+    this.spotLight.visible = this.flashlightOn;
     this.sound.playFlashlight();
     return this.flashlightOn;
   }
 
   updateRigSpine() {
-    const totalSegs = 6;
-    const activeCount = Math.ceil((this.hp / 100) * totalSegs);
+    const healthFrac = this.hp / this.maxHp;
+    const activeSegments = Math.ceil(healthFrac * this.rigSegments.length);
 
-    let activeHex = 0x00f0ff;
-    let hudClass = 'active';
-
-    if (this.hp <= 25) {
-      activeHex = 0xff1a1a;
-      hudClass = 'active critical';
-    } else if (this.hp <= 50) {
-      activeHex = 0xffaa00;
-      hudClass = 'active warning';
-    }
+    let segColor = 0x00f0ff; // Full Cyan
+    if (healthFrac <= 0.25) segColor = 0xff2222; // Critical Red
+    else if (healthFrac <= 0.6) segColor = 0xff9900; // Warning Amber
 
     this.rigSegments.forEach((mesh, idx) => {
-      if (idx < activeCount) {
-        mesh.material.color.setHex(activeHex);
+      if (idx < activeSegments) {
+        mesh.material.color.setHex(segColor);
         mesh.visible = true;
       } else {
-        mesh.visible = false;
+        mesh.material.color.setHex(0x151c24);
       }
     });
 
     if (this.rigBackLight) {
-      this.rigBackLight.color.setHex(activeHex);
-      this.rigBackLight.intensity = activeCount > 0 ? 1.5 : 0;
+      this.rigBackLight.color.setHex(segColor);
+      this.rigBackLight.intensity = healthFrac > 0.25 ? 1.5 : 2.5;
     }
 
-    const hudContainer = document.getElementById('hud-rig-segments');
-    if (hudContainer) {
-      const segElements = hudContainer.querySelectorAll('.segment');
-      segElements.forEach((el, idx) => {
-        if (idx < activeCount) {
-          el.className = `segment ${hudClass}`;
-        } else {
-          el.className = 'segment';
+    const segmentsEl = document.getElementById('rig-segments');
+    if (segmentsEl) {
+      const segDoms = segmentsEl.querySelectorAll('.segment');
+      segDoms.forEach((dom, i) => {
+        dom.className = 'segment';
+        if (i < activeSegments) {
+          if (healthFrac > 0.6) dom.classList.add('active');
+          else if (healthFrac > 0.25) dom.classList.add('warn');
+          else dom.classList.add('crit');
         }
       });
     }
 
-    const hpVal = document.getElementById('hud-hp-val');
-    if (hpVal) {
-      hpVal.textContent = `${Math.round(this.hp)}%`;
-      hpVal.style.color = `#${activeHex.toString(16).padStart(6, '0')}`;
+    const hpNumEl = document.getElementById('hud-hp-val');
+    if (hpNumEl) hpNumEl.textContent = `${Math.round(this.hp)}%`;
+  }
+
+  updateStasisMeter() {
+    if (!this.stasisRingMat) return;
+    if (this.stasisCharges >= 3) {
+      this.stasisRingMat.color.setHex(0x00f0ff); // Full 3 charges: Brilliant cyan
+    } else if (this.stasisCharges === 2) {
+      this.stasisRingMat.color.setHex(0xff9900); // 2 charges: Amber orange
+    } else if (this.stasisCharges === 1) {
+      this.stasisRingMat.color.setHex(0xff2a2a); // 1 charge: Critical red
+    } else {
+      this.stasisRingMat.color.setHex(0x181e26); // 0 charges: Depleted dark
     }
   }
 
-  setProximityOpacity(targetOpacity) {
-    if (Math.abs(this.currentOpacity - targetOpacity) < 0.015) return;
-    this.currentOpacity = targetOpacity;
+  canFireStasis() {
+    return this.isAiming && !this.isDead && this.stasisCharges > 0 && this.stasisCooldown <= 0;
+  }
 
-    const isTransparent = targetOpacity < 0.98;
-    this.suitGroup.traverse(child => {
-      if (child.isMesh && child.material) {
-        if (child === this.holoAmmoMesh) return;
+  fireStasis() {
+    if (!this.isAiming || this.isDead) return false;
+    if (this.stasisCooldown > 0) return false;
 
-        const mats = Array.isArray(child.material) ? child.material : [child.material];
-        mats.forEach(m => {
-          m.transparent = isTransparent;
-          m.opacity = targetOpacity;
-          m.needsUpdate = true;
-        });
-      }
-    });
+    if (this.stasisCharges <= 0) {
+      this.sound.playStasisEmpty();
+      return false;
+    }
+
+    this.stasisCharges--;
+    this.stasisCooldown = 0.9;
+    this.stasisAnimTimer = 0.4;
+    this.updateStasisMeter();
+    this.sound.playStasisFire();
+    return true;
+  }
+
+  rechargeStasis(amount = 3) {
+    this.stasisCharges = Math.min(this.maxStasisCharges, this.stasisCharges + amount);
+    this.updateStasisMeter();
   }
 
   updateHoloAmmo() {
@@ -351,6 +407,8 @@ export class Player {
     this.isAiming = input.aiming;
     this.laserLine.visible = this.isAiming;
 
+    this.stasisCooldown = Math.max(0, this.stasisCooldown - dt);
+
     if (this.isAiming) {
       this.weaponGroup.position.set(0.3, 1.35, 0.6);
       this.armR.position.set(0.3, 1.35, 0.3);
@@ -359,6 +417,24 @@ export class Player {
       this.weaponGroup.position.set(0.48, 1.05, 0.35);
       this.armR.position.set(0.45, 1.15, 0);
       this.armR.rotation.x = 0;
+    }
+
+    // Left Arm positioning: Stasis discharge gesture or aim support pose
+    if (this.stasisAnimTimer > 0) {
+      this.stasisAnimTimer -= dt;
+      this.armL.position.set(-0.35, 1.35, 0.35);
+      this.armL.rotation.x = -Math.PI / 2.2;
+    } else if (this.isAiming) {
+      this.armL.position.set(-0.35, 1.2, 0.15);
+      this.armL.rotation.x = -Math.PI / 4.5;
+    } else {
+      this.armL.position.set(-0.45, 1.15, 0);
+    }
+
+    // 1-charge critical warning pulse on the spine ring
+    if (this.stasisCharges === 1 && this.stasisRingMat) {
+      const pulse = 0.65 + Math.sin(Date.now() * 0.015) * 0.35;
+      this.stasisRingMat.color.setRGB(pulse, 0.1, 0.1);
     }
 
     let speed = this.walkSpeed;
@@ -415,13 +491,13 @@ export class Player {
       const sway = Math.sin(Date.now() * 0.01 * (input.sprint ? 1.4 : 1.0)) * 0.4;
       this.legL.rotation.x = sway;
       this.legR.rotation.x = -sway;
-      if (!this.isAiming) {
+      if (!this.isAiming && this.stasisAnimTimer <= 0) {
         this.armL.rotation.x = -sway * 0.7;
       }
     } else {
       this.legL.rotation.x = 0;
       this.legR.rotation.x = 0;
-      if (!this.isAiming) this.armL.rotation.x = 0;
+      if (!this.isAiming && this.stasisAnimTimer <= 0) this.armL.rotation.x = 0;
     }
 
     if (this.hp <= 25 && this.rigBackLight) {

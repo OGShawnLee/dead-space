@@ -18,6 +18,7 @@ export class DeadSpaceGame {
     this.container = document.getElementById('game-container');
     this.enemies = [];
     this.gibs = [];
+    this.stasisProjectiles = [];
     this.statsKills = 0;
     this.statsLimbs = 0;
     this.isPaused = false;
@@ -41,7 +42,8 @@ export class DeadSpaceGame {
       onHeal: () => this.handleHeal(),
       onTogglePause: () => this.togglePause(),
       onAimChange: (aiming) => this.handleAimChange(aiming),
-      onShoot: () => this.shootPlasmaCutter()
+      onShoot: () => this.shootPlasmaCutter(),
+      onStasis: () => this.handleStasisFire()
     });
 
     this.spawnEnemies();
@@ -248,6 +250,64 @@ export class DeadSpaceGame {
     }
   }
 
+  handleStasisFire() {
+    if (this.player.isDead || this.gameWon || !this.cameraController.isLocked) return;
+
+    if (!this.player.isAiming) {
+      this.showPrompt('¡Apunta para disparar el Módulo de Estabilización!');
+      return;
+    }
+
+    if (this.player.stasisCharges <= 0) {
+      this.player.fireStasis(); // Triggers playStasisEmpty()
+      this.showPrompt('¡Módulo de Estabilización sin energía!');
+      return;
+    }
+
+    if (this.player.fireStasis()) {
+      const armWorldPos = new THREE.Vector3();
+      this.player.armL.getWorldPosition(armWorldPos);
+      armWorldPos.add(new THREE.Vector3(0, 0.1, 0.25));
+
+      const raycaster = new THREE.Raycaster();
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+      const targetDir = raycaster.ray.direction.clone().normalize();
+
+      // Glowing Cyan Stasis Orb
+      const orbGroup = new THREE.Group();
+      orbGroup.position.copy(armWorldPos);
+
+      const coreMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.18, 12, 12),
+        new THREE.MeshBasicMaterial({ color: 0x00f0ff })
+      );
+      orbGroup.add(coreMesh);
+
+      const haloMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.32, 8, 8),
+        new THREE.MeshBasicMaterial({
+          color: 0x38b6ff,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.6
+        })
+      );
+      orbGroup.add(haloMesh);
+
+      const orbLight = new THREE.PointLight(0x00f0ff, 2.5, 5.0);
+      orbGroup.add(orbLight);
+
+      this.scene.add(orbGroup);
+
+      this.stasisProjectiles.push({
+        group: orbGroup,
+        dir: targetDir,
+        speed: 32.0,
+        life: 1.6
+      });
+    }
+  }
+
   shootPlasmaCutter() {
     if (!this.cameraController.isLocked || this.player.isDead || this.gameWon) return;
 
@@ -361,6 +421,9 @@ export class DeadSpaceGame {
             this.player.reserveAmmo += 15;
             this.player.updateHoloAmmo();
             this.showPrompt('+15 Células de Plasma recogidas');
+          } else if (item.type === 'stasis') {
+            this.player.rechargeStasis(3);
+            this.showPrompt('+3 Cargas de Estabilización recargadas');
           } else {
             this.player.medkits++;
             const medkitEl = document.getElementById('medkit-count');
@@ -503,6 +566,62 @@ export class DeadSpaceGame {
       this.level.update(dt, elapsedTime);
       this.player.update(dt, this.input.state, this.level.colliders);
       this.cameraController.update(dt, this.level.colliders);
+
+      // Update Stasis Projectiles
+      for (let i = this.stasisProjectiles.length - 1; i >= 0; i--) {
+        const proj = this.stasisProjectiles[i];
+        proj.life -= dt;
+        const moveStep = proj.dir.clone().multiplyScalar(proj.speed * dt);
+        proj.group.position.add(moveStep);
+        proj.group.rotation.x += dt * 8;
+        proj.group.rotation.y += dt * 8;
+
+        let hit = false;
+        const hitPos = proj.group.position.clone();
+
+        // Check collision against living enemies
+        for (let e = 0; e < this.enemies.length; e++) {
+          const enemy = this.enemies[e];
+          if (!enemy.isDead) {
+            const enemyCenter = enemy.root.position.clone().add(new THREE.Vector3(0, 0.9, 0));
+            if (enemyCenter.distanceTo(proj.group.position) < 1.35) {
+              hit = true;
+              hitPos.copy(proj.group.position);
+              enemy.applyStasis(5.0, 0.5);
+
+              // 2.2m AoE splash for clustered enemies
+              this.enemies.forEach(other => {
+                if (!other.isDead && other !== enemy) {
+                  if (other.root.position.distanceTo(hitPos) <= 2.2) {
+                    other.applyStasis(5.0, 0.5);
+                  }
+                }
+              });
+
+              this.sound.playStasisHit();
+              this.bloodSys.spawnStasisSparks(hitPos, 30);
+              break;
+            }
+          }
+        }
+
+        // Check collision against level colliders
+        if (!hit) {
+          const pBox = new THREE.Box3().setFromCenterAndSize(proj.group.position, new THREE.Vector3(0.3, 0.3, 0.3));
+          for (let c = 0; c < this.level.colliders.length; c++) {
+            if (pBox.intersectsBox(this.level.colliders[c])) {
+              hit = true;
+              this.bloodSys.spawnStasisSparks(hitPos, 14);
+              break;
+            }
+          }
+        }
+
+        if (hit || proj.life <= 0) {
+          this.scene.remove(proj.group);
+          this.stasisProjectiles.splice(i, 1);
+        }
+      }
 
       this.enemies.forEach(enemy => {
         enemy.update(dt, this.player, this.level.colliders);

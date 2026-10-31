@@ -11,6 +11,7 @@ import { checkLineOfSight } from '../world/LineOfSight.js';
  * - Dismemberment architecture matching Necromorph.js (head decapitation, leg crawling, proper GibPart creation)
  * - Decapitation headshot kills Exploder immediately, leaving the volatile sac intact on the corpse or floor
  * - Shooting the sac (living or dead) detonates a massive AoE blast
+ * - Stasis Module temporal dilation (slows running, detonation fuse, and animation by 50%)
  */
 export class Exploder {
   constructor(scene, soundSystem, spawnPos, gibList, bloodSys) {
@@ -33,6 +34,10 @@ export class Exploder {
     this.squealTimer = 0;
     this.fuseTimer = 0;
     this.isDetonating = false;
+
+    // Stasis Status
+    this.stasisTimer = 0;
+    this.stasisFactor = 0.5;
 
     // Limb Tracking
     this.hasHead = true;
@@ -62,6 +67,11 @@ export class Exploder {
     });
 
     this.buildBody();
+  }
+
+  applyStasis(duration = 5.0, factor = 0.5) {
+    this.stasisTimer = Math.max(this.stasisTimer, duration);
+    this.stasisFactor = factor;
   }
 
   tagLimb(mesh, type, hp) {
@@ -302,6 +312,20 @@ export class Exploder {
       return;
     }
 
+    let effectiveDt = dt;
+    if (this.stasisTimer > 0) {
+      this.stasisTimer -= dt;
+      effectiveDt = dt * this.stasisFactor;
+      if (Math.random() < 0.25 && this.bloodSys) {
+        const sparkPos = this.root.position.clone().add(new THREE.Vector3(
+          (Math.random() - 0.5) * 0.7,
+          Math.random() * 1.5,
+          (Math.random() - 0.5) * 0.7
+        ));
+        this.bloodSys.spawnStasisSparks(sparkPos, 3);
+      }
+    }
+
     // Pulsate glowing amber sac
     if (this.hasSac && this.sacLight) {
       const pulse = 0.8 + Math.sin(Date.now() * 0.012) * 0.4;
@@ -321,13 +345,13 @@ export class Exploder {
         this.state = 'CHASE';
         this.sound.playExploderSqueal();
       } else {
-        this.patrolTimer -= dt;
+        this.patrolTimer -= effectiveDt;
         if (this.patrolTimer <= 0) {
           this.patrolTimer = Math.random() * 3.0 + 2.0;
           this.patrolDir = Math.random() * Math.PI * 2;
         }
 
-        const moveVec = new THREE.Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar((this.isCrawling ? 0.45 : 0.9) * dt);
+        const moveVec = new THREE.Vector3(Math.sin(this.patrolDir), 0, Math.cos(this.patrolDir)).multiplyScalar((this.isCrawling ? 0.45 : 0.9) * effectiveDt);
         const nextPos = this.root.position.clone().add(moveVec);
 
         const testBox = new THREE.Box3(
@@ -357,7 +381,7 @@ export class Exploder {
       this.root.rotation.y = angle;
 
       // Occasional suicidal squeal
-      this.squealTimer -= dt;
+      this.squealTimer -= effectiveDt;
       if (this.squealTimer <= 0) {
         this.squealTimer = Math.random() * 2.5 + 2.0;
         this.sound.playExploderSqueal();
@@ -370,7 +394,7 @@ export class Exploder {
       }
 
       if (this.isDetonating) {
-        this.fuseTimer -= dt;
+        this.fuseTimer -= effectiveDt;
         if (this.armLGroup) this.armLGroup.rotation.x = -Math.PI / 1.5;
         if (this.fuseTimer <= 0) {
           this.explode(false);
@@ -379,7 +403,7 @@ export class Exploder {
       } else {
         // Move towards player
         toPlayer.normalize();
-        const moveStep = toPlayer.clone().multiplyScalar(this.speed * dt);
+        const moveStep = toPlayer.clone().multiplyScalar(this.speed * effectiveDt);
         const nextPos = this.root.position.clone().add(moveStep);
 
         const testBox = new THREE.Box3(
@@ -399,7 +423,8 @@ export class Exploder {
           this.root.position.copy(nextPos);
         }
 
-        const t = Date.now() * 0.012;
+        const animSpeed = this.stasisTimer > 0 ? 0.006 : 0.012;
+        const t = Date.now() * animSpeed;
         if (!this.isCrawling) {
           if (this.hasLegL && this.legLGroup) this.legLGroup.rotation.x = Math.sin(t) * 0.6;
           if (this.hasLegR && this.legRGroup) this.legRGroup.rotation.x = -Math.sin(t) * 0.6;

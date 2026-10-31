@@ -2,8 +2,9 @@ const THREE = window.THREE;
 import { TextureFactory } from '../graphics/TextureFactory.js';
 
 /**
- * Procedural Ship Level Generator
- * Generates an extruded 3D labyrinth, metal panels, colliders, escape airlock, and props.
+ * USG Ishimura Sector Ship Level
+ * Procedurally generates claustrophobic steel corridors, decompression doors, flickering lighting,
+ * and collectible supply crates (Ammo, Medkits, Stasis Packs).
  */
 export class ShipLevel {
   constructor(scene) {
@@ -16,34 +17,40 @@ export class ShipLevel {
     this.pickups = [];
     this.escapeZone = null;
     this.spawnPoints = [];
+
     this.playerStart = new THREE.Vector3(0, 0, 0);
 
+    this.initMaterials();
+    this.buildLevel();
+  }
+
+  initMaterials() {
     this.matWall = new THREE.MeshStandardMaterial({
       map: TextureFactory.createMetalWall(),
       roughness: 0.65,
-      metalness: 0.5
-    });
-    this.matFloor = new THREE.MeshStandardMaterial({
-      map: TextureFactory.createFloorGrate(),
-      roughness: 0.8,
       metalness: 0.6
     });
+
+    this.matFloor = new THREE.MeshStandardMaterial({
+      map: TextureFactory.createFloorGrate(),
+      roughness: 0.5,
+      metalness: 0.8
+    });
+
     this.matCeiling = new THREE.MeshStandardMaterial({
       map: TextureFactory.createCeiling(),
-      roughness: 0.9,
-      metalness: 0.3
+      roughness: 0.8,
+      metalness: 0.4
     });
     this.matEscape = new THREE.MeshStandardMaterial({
       color: 0x00ff66,
-      emissive: 0x00ff66,
-      emissiveIntensity: 0.8,
+      emissive: 0x00aa44,
+      emissiveIntensity: 0.6,
       roughness: 0.2
     });
-
-    this.generate();
   }
 
-  generate() {
+  buildLevel() {
     const N = this.gridSize;
     const grid = Array(N).fill(null).map(() => Array(N).fill(1));
 
@@ -130,8 +137,10 @@ export class ShipLevel {
               this.createCorridorLight(wx, wz, Math.random() < 0.35 ? 'red' : 'white');
             }
 
-            if (Math.random() < 0.2) {
-              this.createPickup(wx, wz, Math.random() < 0.55 ? 'ammo' : 'medkit');
+            if (Math.random() < 0.22) {
+              const r = Math.random();
+              const pickupType = r < 0.45 ? 'ammo' : (r < 0.75 ? 'medkit' : 'stasis');
+              this.createPickup(wx, wz, pickupType);
             }
           }
         }
@@ -199,10 +208,9 @@ export class ShipLevel {
   }
 
   createPickup(x, z, type) {
-    const isAmmo = type === 'ammo';
     const group = new THREE.Group();
 
-    if (isAmmo) {
+    if (type === 'ammo') {
       const geo = new THREE.BoxGeometry(0.45, 0.25, 0.35);
       const mat = new THREE.MeshStandardMaterial({
         color: 0x00a8cc,
@@ -213,6 +221,27 @@ export class ShipLevel {
       const mesh = new THREE.Mesh(geo, mat);
       group.add(mesh);
       const pl = new THREE.PointLight(0x00e5ff, 0.6, 2.5);
+      group.add(pl);
+    } else if (type === 'stasis') {
+      // Hexagonal Stasis Recharge Battery Pack
+      const geo = new THREE.CylinderGeometry(0.18, 0.18, 0.4, 6);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        emissive: 0x00f0ff,
+        emissiveIntensity: 0.8,
+        roughness: 0.2,
+        metalness: 0.5
+      });
+      const mesh = new THREE.Mesh(geo, mat);
+      group.add(mesh);
+
+      const ringGeo = new THREE.TorusGeometry(0.22, 0.03, 8, 16);
+      const ringMat = new THREE.MeshBasicMaterial({ color: 0x00f0ff });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      group.add(ring);
+
+      const pl = new THREE.PointLight(0x00f0ff, 0.9, 2.8);
       group.add(pl);
     } else {
       const geo = new THREE.CylinderGeometry(0.2, 0.2, 0.45, 8);

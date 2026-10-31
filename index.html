@@ -3,35 +3,38 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dead Space: Sector Protocol</title>
+
+  <!-- Anti-caching headers for development and instant reload -->
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>Dead Space: Sector Protocol (Three.js Prototype)</title>
+
   <link rel="stylesheet" href="style.css">
-  <!-- Three.js CDN -->
+
+  <!-- Three.js (r128) CDN Global Script -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-  <!-- Canvas 3D -->
+  <!-- 3D WebGL Canvas Container -->
   <div id="game-container"></div>
 
-  <!-- Diegetic CRT Overlay & Scanlines -->
+  <!-- Atmospheric Post-Processing Overlays -->
   <div class="crt-overlay"></div>
   <div class="vignette-overlay"></div>
-  <div class="damage-flash" id="damage-flash"></div>
+  <div id="damage-flash" class="damage-flash"></div>
 
-  <!-- Minimal HUD (Diegetic Aesthetic) -->
+  <!-- Diegetic In-World HUD -->
   <div id="hud">
-    <!-- Top Left Objective & Diagnostics -->
+    <!-- Top Left Sector Status & Objective Info -->
     <div class="hud-top-left">
       <div class="rig-status-badge">
         <span class="rig-pulse"></span>
-        <span class="rig-text">C.E.C. RIG ENLAZADO // BIOS v4.2</span>
+        <span class="rig-text">C.E.C. RIG ENLAZADO // BIOS V4.2</span>
       </div>
-      <!-- HUD Segmented RIG Health Display -->
       <div class="hud-health-bar-container">
         <span class="rig-health-label">RIG VITAL:</span>
-        <div class="rig-segments" id="hud-rig-segments">
+        <div id="rig-segments" class="rig-segments">
           <div class="segment active"></div>
           <div class="segment active"></div>
           <div class="segment active"></div>
@@ -81,9 +84,9 @@
       <div class="suit-logo">C.E.C. DEEP SPACE MINING</div>
       <h1 class="glitch-title" data-text="DEAD SPACE">DEAD SPACE</h1>
       <h2 class="sub-title">SECTOR PROTOCOL // PROTOTIPO WEBGL</h2>
-      
+
       <div class="lore-brief">
-        La nave USG Ishimura está en silencio. Los conductos de ventilación rezuman sangre y criaturas biomecánicas mutadas han tomado los pasillos. 
+        La nave USG Ishimura está en silencio. Los conductos de ventilación rezuman sangre y criaturas biomecánicas mutadas han tomado los pasillos.
         <br><br>
         <strong class="dismember-warning">REGLA VITAL:</strong> Cortar sus extremidades es la única forma de frenarlos. Disparar al torso apenas les causa daño. Si les cortas ambos brazos, quedan desarmados.
       </div>
@@ -91,13 +94,13 @@
       <div class="controls-grid">
         <div class="control-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Moverse</span></div>
         <div class="control-item"><kbd>RATÓN</kbd><span>Mirar / Rotar cuerpo</span></div>
-        <div class="control-item"><kbd>CLIC DERECHO</kbd><span>Apuntar Cortador de Plasma</span></div>
-        <div class="control-item"><kbd>CLIC IZQ.</kbd><span>Disparar rayo de plasma</span></div>
+        <div class="control-item"><kbd>CLIC DERECHO</kbd><span>Apuntar arma</span></div>
+        <div class="control-item"><kbd>CLIC IZQ.</kbd><span>Disparar plasma</span></div>
+        <div class="control-item"><kbd>C</kbd> / <kbd>E</kbd><span>Estabilización (Apuntando)</span></div>
         <div class="control-item"><kbd>R</kbd><span>Recargar Cortador</span></div>
         <div class="control-item"><kbd>SHIFT</kbd><span>Correr (Acelerar paso)</span></div>
-        <div class="control-item"><kbd>Q</kbd><span>Inyectar Botiquín (+50 Salud)</span></div>
+        <div class="control-item"><kbd>Q</kbd><span>Inyectar Botiquín (+50)</span></div>
         <div class="control-item"><kbd>F</kbd><span>Alternar Linterna</span></div>
-        <div class="control-item"><kbd>ESC</kbd><span>Pausar / Liberar Cursor</span></div>
       </div>
 
       <div class="ui-guide">
@@ -106,6 +109,9 @@
         </div>
         <div class="guide-col">
           <span class="guide-bullet cyan"></span> <strong>Munición Holográfica:</strong> Proyectada directamente junto al arma.
+        </div>
+        <div class="guide-col">
+          <span class="guide-bullet cyan"></span> <strong>Estasis en la Espalda:</strong> Medidor circular en el omóplato derecho (Cian: 3, Naranja: 2, Rojo: 1, Apagado: 0).
         </div>
       </div>
 
@@ -178,14 +184,16 @@
   <!-- Victory Screen -->
   <div id="victory-screen" class="overlay-modal">
     <div class="modal-card victory-card">
-      <div class="green-scan"></div>
-      <h1 class="victory-title">CÁPSULA DE ESCAPE LANZADA</h1>
-      <h2 class="victory-subtitle">SECTOR PURGADO // HAS SOBREVIVIDO</h2>
-      <p class="victory-desc">Lograste alcanzar el módulo de salvamento y desacoplarte del infierno antes de que los mamparos colapsaran.</p>
-      <div class="stats-summary" id="victory-stats">
-        <div>NECROMORFOS DESMEMBRADOS: <span id="stat-kills" class="stat-num">0</span></div>
+      <div class="alert-stripes"></div>
+      <h1 class="victory-title">EVACUACIÓN COMPLETADA</h1>
+      <h2 class="victory-subtitle">SECTOR ESCAPADO // CÁPSULA EN ÓRBITA</h2>
+      <p class="victory-desc">Has escapado con vida a bordo de la cápsula de escape. Las transmisiones de auxilio han sido emitidas al espacio profundo.</p>
+
+      <div class="stats-summary">
+        <div>NECROMORFOS ELIMINADOS: <span id="stat-kills" class="stat-num">0</span></div>
         <div>EXTREMIDADES CORTADAS: <span id="stat-limbs" class="stat-num">0</span></div>
       </div>
+
       <button id="btn-restart-victory" class="cec-button victory">NUEVA INCURSIÓN</button>
     </div>
   </div>
