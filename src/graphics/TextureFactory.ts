@@ -224,33 +224,83 @@ export class TextureFactory {
 
   static createHoloAmmoCanvas(ammo: number, maxAmmo: number): HTMLCanvasElement {
     const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = 128;
+    canvas.width = 512;
+    canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
-    ctx.clearRect(0, 0, 256, 128);
+    ctx.clearRect(0, 0, 512, 256);
 
-    ctx.strokeStyle = 'rgba(0, 229, 255, 0.7)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(10, 10, 236, 108);
+    // Color thresholds: Blue (> 50%) -> Orange (21-50%) -> Red (<= 20%)
+    const ratio = ammo / Math.max(1, maxAmmo);
+    let mainColor = '#00f0ff';
+    let glowColor = 'rgba(0, 240, 255, 0.25)';
+    let scanlineFill = 'rgba(0, 240, 255, 0.08)';
+    let frameColor = 'rgba(0, 240, 255, 0.65)';
+    let subTextColor = '#7dd3fc';
 
-    ctx.fillStyle = 'rgba(0, 229, 255, 0.08)';
-    for (let y = 14; y < 118; y += 4) {
-      ctx.fillRect(12, y, 232, 2);
+    if (ratio <= 0.2) {
+      // Critical Red (0 to 2 shots)
+      mainColor = '#ff2222';
+      glowColor = 'rgba(255, 34, 34, 0.25)';
+      scanlineFill = 'rgba(255, 34, 34, 0.12)';
+      frameColor = 'rgba(255, 34, 34, 0.75)';
+      subTextColor = '#fca5a5';
+    } else if (ratio <= 0.5) {
+      // Warning Orange / Amber (3 to 5 shots)
+      mainColor = '#ff9900';
+      glowColor = 'rgba(255, 153, 0, 0.25)';
+      scanlineFill = 'rgba(255, 153, 0, 0.10)';
+      frameColor = 'rgba(255, 153, 0, 0.75)';
+      subTextColor = '#fdba74';
     }
 
-    ctx.fillStyle = ammo === 0 ? '#ff3333' : '#00e5ff';
-    ctx.font = 'bold 54px monospace';
+    // Outer subtle boundary frame
+    ctx.strokeStyle = frameColor;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(16, 16, 480, 224);
+
+    // Subtle holographic scanlines
+    ctx.fillStyle = scanlineFill;
+    for (let y = 20; y < 236; y += 8) {
+      ctx.fillRect(20, y, 472, 4);
+    }
+
+    // Dead Space holographic corner brackets
+    ctx.strokeStyle = mainColor;
+    ctx.lineWidth = 6;
+    const bLen = 28;
+    // Top-left
+    ctx.beginPath();
+    ctx.moveTo(16, 16 + bLen); ctx.lineTo(16, 16); ctx.lineTo(16 + bLen, 16);
+    ctx.stroke();
+    // Top-right
+    ctx.beginPath();
+    ctx.moveTo(496 - bLen, 16); ctx.lineTo(496, 16); ctx.lineTo(496, 16 + bLen);
+    ctx.stroke();
+    // Bottom-left
+    ctx.beginPath();
+    ctx.moveTo(16, 240 - bLen); ctx.lineTo(16, 240); ctx.lineTo(16 + bLen, 240);
+    ctx.stroke();
+    // Bottom-right
+    ctx.beginPath();
+    ctx.moveTo(496 - bLen, 240); ctx.lineTo(496, 240); ctx.lineTo(496 - bLen, 240);
+    ctx.stroke();
+
+    // Prominent bold current ammo number
+    ctx.fillStyle = mainColor;
+    ctx.font = '900 115px monospace';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.shadowColor = ammo === 0 ? 'rgba(255, 51, 51, 0.8)' : 'rgba(0, 229, 255, 0.9)';
-    ctx.shadowBlur = 10;
-    ctx.fillText(`${ammo}`, 95, 64);
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 16;
+    ctx.fillText(`${ammo}`, 190, 128);
 
-    ctx.font = '24px monospace';
-    ctx.fillStyle = '#7dd3fc';
-    ctx.shadowBlur = 0;
-    ctx.fillText(`/${maxAmmo}`, 180, 72);
+    // Capacity indicator
+    ctx.font = '700 48px monospace';
+    ctx.fillStyle = subTextColor;
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 8;
+    ctx.fillText(`/${maxAmmo}`, 360, 140);
 
     return canvas;
   }

@@ -147,13 +147,18 @@ export class ShipLevel {
           this.scene.add(ceilMesh);
 
           if (val === 2) {
-            this.playerStart.set(wx, 0, wz);
+            if (x === 3 && z === 3) {
+              this.playerStart.set(wx, 0, wz);
+            }
           } else if (val === 3) {
-            this.escapeZone = {
-              center: new Vector3(wx, 0, wz),
-              radius: 3.5
-            };
-            this.createEscapeChamber(wx, wz);
+            // Only spawn escape chamber and escape zone once at center of escape room
+            if (x === N - 4 && z === N - 4) {
+              this.escapeZone = {
+                center: new Vector3(wx, 0, wz),
+                radius: 4.2
+              };
+              this.createEscapeChamber(wx, wz);
+            }
           } else if (val === 0 || val === 4) {
             if (Math.random() < 0.22 && (Math.abs(wx - this.playerStart.x) > 10 || Math.abs(wz - this.playerStart.z) > 10)) {
               this.spawnPoints.push(new Vector3(wx, 0, wz));

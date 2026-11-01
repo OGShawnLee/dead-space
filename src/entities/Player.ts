@@ -4,6 +4,7 @@ import {
   BoxGeometry,
   CylinderGeometry,
   PlaneGeometry,
+  TorusGeometry,
   Line,
   BufferGeometry,
   LineBasicMaterial,
@@ -67,8 +68,10 @@ export class Player {
   suitGroup!: Group;
   torsoMesh!: Mesh<BoxGeometry, MeshStandardMaterial>;
   rigSegments!: Mesh<BoxGeometry, MeshBasicMaterial>[];
-  stasisRingMat!: MeshBasicMaterial;
-  stasisRing!: Mesh<CylinderGeometry, MeshBasicMaterial>;
+  stasisPlate!: Mesh<BoxGeometry, MeshStandardMaterial>;
+  stasisSegments: Mesh<TorusGeometry, MeshBasicMaterial>[] = [];
+  stasisSegmentMats: MeshBasicMaterial[] = [];
+  stasisLight!: PointLight;
   rigBackLight!: PointLight;
   legL!: Mesh<BoxGeometry, MeshStandardMaterial>;
   legR!: Mesh<BoxGeometry, MeshStandardMaterial>;
@@ -79,6 +82,7 @@ export class Player {
   ammoCanvas!: HTMLCanvasElement;
   ammoTexture!: CanvasTexture;
   holoScreen!: Mesh<PlaneGeometry, MeshBasicMaterial>;
+  holoLight!: PointLight;
   laserLine!: Line<BufferGeometry, LineBasicMaterial>;
 
   spotLight!: SpotLight;
@@ -93,6 +97,7 @@ export class Player {
     this.buildFlashlight();
     this.updateRigSpine();
     this.updateStasisMeter();
+    this.updateHoloAmmo();
   }
 
   buildSuitMesh(): void {
@@ -174,15 +179,70 @@ export class Player {
       this.rigSegments.push(segMesh);
     }
 
-    // Circular Stasis Meter on right shoulder blade
-    this.stasisRingMat = new MeshBasicMaterial({ color: 0x00f0ff });
-    this.stasisRing = new Mesh(
-      new CylinderGeometry(0.065, 0.065, 0.04, 16),
-      this.stasisRingMat
+    // Extended RIG Shoulder Platform / Bracket for Stasis Module (as in Dead Space 1)
+    this.stasisPlate = new Mesh(
+      new BoxGeometry(0.18, 0.22, 0.09),
+      darkMetalMat
     );
-    this.stasisRing.rotation.x = Math.PI / 2;
-    this.stasisRing.position.set(0.18, 1.4, -0.32);
-    this.suitGroup.add(this.stasisRing);
+    this.stasisPlate.position.set(0.17, 1.38, -0.28);
+    this.suitGroup.add(this.stasisPlate);
+
+    // Circular armored socket collar
+    const socketGeo = new CylinderGeometry(0.078, 0.082, 0.025, 24);
+    const socketMesh = new Mesh(socketGeo, darkMetalMat);
+    socketMesh.rotation.x = Math.PI / 2;
+    socketMesh.position.set(0.17, 1.38, -0.33);
+    this.suitGroup.add(socketMesh);
+
+    // Central mechanical node hub (circular metal cylinder)
+    const nodeGeo = new CylinderGeometry(0.038, 0.040, 0.03, 24);
+    const nodeMesh = new Mesh(nodeGeo, darkMetalMat);
+    nodeMesh.rotation.x = Math.PI / 2;
+    nodeMesh.position.set(0.17, 1.38, -0.35);
+    this.suitGroup.add(nodeMesh);
+
+    // Inner mechanical core detail / cap
+    const nodePinGeo = new CylinderGeometry(0.016, 0.018, 0.012, 16);
+    const nodePinMesh = new Mesh(nodePinGeo, suitMat);
+    nodePinMesh.rotation.x = Math.PI / 2;
+    nodePinMesh.position.set(0.17, 1.38, -0.366);
+    this.suitGroup.add(nodePinMesh);
+
+    // Recessed dark groove under circular light
+    const grooveGeo = new TorusGeometry(0.058, 0.008, 8, 32);
+    const grooveMat = new MeshStandardMaterial({
+      color: 0x10141a,
+      roughness: 0.85,
+      metalness: 0.6
+    });
+    const grooveMesh = new Mesh(grooveGeo, grooveMat);
+    grooveMesh.position.set(0.17, 1.38, -0.345);
+    this.suitGroup.add(grooveMesh);
+
+    // 3 Curved Luminous Arc Segments wrapping around the central node
+    this.stasisSegments = [];
+    this.stasisSegmentMats = [];
+    const numStasisSegments = 3;
+    const totalArc = Math.PI * 1.78; // ~320 degrees horseshoe
+    const gap = 0.10; // Radian gap between segments
+    const segArc = (totalArc - (numStasisSegments - 1) * gap) / numStasisSegments;
+    const startOffsetAngle = Math.PI * 0.85; // Opening at upper-left towards neck
+
+    for (let i = 0; i < numStasisSegments; i++) {
+      const segGeo = new TorusGeometry(0.058, 0.0075, 8, 20, segArc);
+      const segMat = new MeshBasicMaterial({ color: 0x00f0ff });
+      const segMesh = new Mesh(segGeo, segMat);
+      segMesh.position.set(0.17, 1.38, -0.355);
+      segMesh.rotation.z = startOffsetAngle + i * (segArc + gap);
+      this.suitGroup.add(segMesh);
+      this.stasisSegments.push(segMesh);
+      this.stasisSegmentMats.push(segMat);
+    }
+
+    // Dedicated PointLight for the Stasis Gauge (illuminates shoulder and environment)
+    this.stasisLight = new PointLight(0x00f0ff, 1.4, 2.2);
+    this.stasisLight.position.set(0.17, 1.38, -0.42);
+    this.suitGroup.add(this.stasisLight);
 
     // Dedicated Neon Back Light for the RIG Spine Aura
     this.rigBackLight = new PointLight(0x00f0ff, 1.5, 2.5);
@@ -214,6 +274,16 @@ export class Player {
     this.currentOpacity = targetOpacity;
 
     const applyOpacity = (obj: any): void => {
+      // Hologram UI and laser lines must ALWAYS remain transparent
+      if (obj === this.holoScreen || obj === this.laserLine) {
+        if (obj.material) {
+          obj.material.transparent = true;
+          obj.material.opacity = (obj === this.holoScreen ? 0.95 : 0.85) * targetOpacity;
+          obj.material.needsUpdate = true;
+        }
+        return;
+      }
+
       if (obj.material) {
         const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
         mats.forEach((mat: any) => {
@@ -238,13 +308,14 @@ export class Player {
       roughness: 0.3
     });
 
-    const body = new Mesh(new BoxGeometry(0.12, 0.16, 0.45), metalMat);
+    // Body
+    const bodyGeo = new BoxGeometry(0.12, 0.18, 0.4);
+    const body = new Mesh(bodyGeo, metalMat);
     this.weaponGroup.add(body);
 
-    const emitter = new Mesh(
-      new CylinderGeometry(0.05, 0.05, 0.12, 8),
-      new MeshBasicMaterial({ color: 0x00e5ff })
-    );
+    // Front emitter
+    const emitterGeo = new CylinderGeometry(0.04, 0.04, 0.08, 8);
+    const emitter = new Mesh(emitterGeo, metalMat);
     emitter.rotation.x = Math.PI / 2;
     emitter.position.set(0, 0, 0.24);
     this.weaponGroup.add(emitter);
@@ -255,23 +326,25 @@ export class Player {
     this.ammoTexture.magFilter = LinearFilter;
     this.ammoTexture.minFilter = LinearFilter;
 
-    const holoScreenGeo = new PlaneGeometry(0.26, 0.13);
+    // Larger dimensions for high clarity (0.38m x 0.19m)
+    const holoScreenGeo = new PlaneGeometry(0.38, 0.19);
     const holoScreenMat = new MeshBasicMaterial({
       map: this.ammoTexture,
       transparent: true,
       opacity: 0.95,
-      side: DoubleSide
+      side: DoubleSide,
+      depthWrite: false
     });
     this.holoScreen = new Mesh(holoScreenGeo, holoScreenMat);
-    this.holoScreen.position.set(0.14, 0.16, -0.06);
-    this.holoScreen.rotation.y = -Math.PI / 3.8;
-    this.holoScreen.rotation.x = -Math.PI / 12;
+    // Directly perpendicular to X and Y axes of the gun, facing the player/camera
+    this.holoScreen.position.set(0.12, 0.18, 0.0);
+    this.holoScreen.rotation.set(0, Math.PI, 0);
     this.weaponGroup.add(this.holoScreen);
 
-    // Subtle cyan holographic glow light
-    const holoLight = new PointLight(0x00e5ff, 0.4, 0.8);
-    holoLight.position.copy(this.holoScreen.position);
-    this.weaponGroup.add(holoLight);
+    // Dynamic holographic glow light
+    this.holoLight = new PointLight(0x00f0ff, 0.5, 1.5);
+    this.holoLight.position.copy(this.holoScreen.position);
+    this.weaponGroup.add(this.holoLight);
 
     // 3 Aiming Lasers
     const laserMat = new LineBasicMaterial({
@@ -356,19 +429,51 @@ export class Player {
   }
 
   updateStasisMeter(): void {
-    if (!this.stasisRingMat) return;
+    if (!this.stasisSegmentMats || this.stasisSegmentMats.length === 0) return;
+
+    const unlitColor = 0x10141a;
+
     if (this.stasisCharges >= 3) {
-      this.stasisRingMat.color.setHex(0x00f0ff); // Full 3 charges: Brilliant cyan
-      this.stasisRingMat.needsUpdate = true;
+      // 3 Charges: Full gauge, brilliant cyan
+      for (let i = 0; i < 3; i++) {
+        this.stasisSegmentMats[i].color.setHex(0x00f0ff);
+        this.stasisSegmentMats[i].needsUpdate = true;
+      }
+      if (this.stasisLight) {
+        this.stasisLight.color.setHex(0x00f0ff);
+        this.stasisLight.intensity = 1.4;
+      }
     } else if (this.stasisCharges === 2) {
-      this.stasisRingMat.color.setHex(0xff9900); // 2 charges: Amber orange
-      this.stasisRingMat.needsUpdate = true;
+      // 2 Charges: 2 segments active in amber, 3rd segment drained
+      this.stasisSegmentMats[0].color.setHex(0xff9900);
+      this.stasisSegmentMats[1].color.setHex(0xff9900);
+      this.stasisSegmentMats[2].color.setHex(unlitColor);
+      for (let i = 0; i < 3; i++) this.stasisSegmentMats[i].needsUpdate = true;
+
+      if (this.stasisLight) {
+        this.stasisLight.color.setHex(0xff9900);
+        this.stasisLight.intensity = 1.1;
+      }
     } else if (this.stasisCharges === 1) {
-      this.stasisRingMat.color.setHex(0xff2a2a); // 1 charge: Critical red
-      this.stasisRingMat.needsUpdate = true;
+      // 1 Charge: 1 segment active in critical red, other 2 drained
+      this.stasisSegmentMats[0].color.setHex(0xff2a2a);
+      this.stasisSegmentMats[1].color.setHex(unlitColor);
+      this.stasisSegmentMats[2].color.setHex(unlitColor);
+      for (let i = 0; i < 3; i++) this.stasisSegmentMats[i].needsUpdate = true;
+
+      if (this.stasisLight) {
+        this.stasisLight.color.setHex(0xff2a2a);
+        this.stasisLight.intensity = 0.85;
+      }
     } else {
-      this.stasisRingMat.color.setHex(0x181e26); // 0 charges: Depleted dark
-      this.stasisRingMat.needsUpdate = true;
+      // 0 Charges: Completely empty gauge, dark
+      for (let i = 0; i < 3; i++) {
+        this.stasisSegmentMats[i].color.setHex(unlitColor);
+        this.stasisSegmentMats[i].needsUpdate = true;
+      }
+      if (this.stasisLight) {
+        this.stasisLight.intensity = 0.0;
+      }
     }
   }
 
@@ -402,10 +507,26 @@ export class Player {
     const newCanvas = TextureFactory.createHoloAmmoCanvas(this.ammo, this.maxAmmo);
     const ctx = this.ammoCanvas.getContext('2d');
     if (ctx) {
-      ctx.clearRect(0, 0, 256, 128);
+      ctx.clearRect(0, 0, this.ammoCanvas.width, this.ammoCanvas.height);
       ctx.drawImage(newCanvas, 0, 0);
     }
     this.ammoTexture.needsUpdate = true;
+
+    if (this.holoScreen && this.holoScreen.material) {
+      this.holoScreen.material.transparent = true;
+      this.holoScreen.material.needsUpdate = true;
+    }
+
+    if (this.holoLight) {
+      const ratio = this.ammo / Math.max(1, this.maxAmmo);
+      if (ratio <= 0.2) {
+        this.holoLight.color.setHex(0xff2222);
+      } else if (ratio <= 0.5) {
+        this.holoLight.color.setHex(0xff9900);
+      } else {
+        this.holoLight.color.setHex(0x00f0ff);
+      }
+    }
   }
 
   takeDamage(amount: number): void {
@@ -437,7 +558,7 @@ export class Player {
   }
 
   reload(): boolean {
-    if (this.ammo >= this.maxAmmo || this.reserveAmmo <= 0) return false;
+    if (this.ammo >= this.maxAmmo || this.reserveAmmo <= 0 || this.isDead) return false;
     const needed = this.maxAmmo - this.ammo;
     const toLoad = Math.min(needed, this.reserveAmmo);
     this.ammo += toLoad;
@@ -475,12 +596,6 @@ export class Player {
       this.armL.rotation.x = -Math.PI / 4.5;
     } else {
       this.armL.position.set(-0.45, 1.15, 0);
-    }
-
-    // 1-charge critical warning pulse on the spine ring
-    if (this.stasisCharges === 1 && this.stasisRingMat) {
-      const pulse = 0.65 + Math.sin(Date.now() * 0.015) * 0.35;
-      this.stasisRingMat.color.setRGB(pulse, 0.1, 0.1);
     }
 
     let speed = this.walkSpeed;
@@ -549,6 +664,12 @@ export class Player {
     if (this.hp <= 25 && this.rigBackLight) {
       const pulse = 0.8 + Math.sin(Date.now() * 0.015) * 0.7;
       this.rigBackLight.intensity = Math.max(0.2, pulse);
+    }
+
+    // Low-stasis urgent pulse when down to 1 critical charge
+    if (this.stasisCharges === 1 && this.stasisLight) {
+      const pulse = 0.7 + Math.sin(Date.now() * 0.012) * 0.3;
+      this.stasisLight.intensity = 0.85 * pulse;
     }
 
     if (this.hp <= 45) {
