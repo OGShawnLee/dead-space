@@ -10,6 +10,7 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
 
+  <link rel="preload" href="/fonts/GeistPixel-Line.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -75,125 +76,8 @@
     </div>
   </div>
 
-  <!-- Start Screen / Instructions Modal -->
-  <div id="start-screen" class="overlay-modal active">
-    <div class="modal-card">
-      <div class="suit-logo">C.E.C. DEEP SPACE MINING</div>
-      <h1 class="glitch-title" data-text="DEAD SPACE">DEAD SPACE</h1>
-      <h2 class="sub-title">SECTOR PROTOCOL // PROTOTIPO WEBGL</h2>
-
-      <div class="lore-brief">
-        La nave USG Ishimura está en silencio. Los conductos de ventilación rezuman sangre y criaturas biomecánicas mutadas han tomado los pasillos.
-        <br><br>
-        <strong class="dismember-warning">REGLA VITAL:</strong> Cortar sus extremidades es la única forma de frenarlos. Disparar al torso apenas les causa daño. Si les cortas ambos brazos, quedan desarmados.
-      </div>
-
-      <div class="controls-grid">
-        <div class="control-item"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Moverse</span></div>
-        <div class="control-item"><kbd>RATÓN</kbd><span>Mirar / Rotar cuerpo</span></div>
-        <div class="control-item"><kbd>CLIC DERECHO</kbd><span>Apuntar arma</span></div>
-        <div class="control-item"><kbd>CLIC IZQ.</kbd><span>Disparar plasma</span></div>
-        <div class="control-item"><kbd>C</kbd> / <kbd>E</kbd><span>Estabilización (Apuntando)</span></div>
-        <div class="control-item"><kbd>R</kbd><span>Recargar Cortador</span></div>
-        <div class="control-item"><kbd>SHIFT</kbd><span>Correr (Acelerar paso)</span></div>
-        <div class="control-item"><kbd>Q</kbd><span>Inyectar Botiquín (+50)</span></div>
-        <div class="control-item"><kbd>F</kbd><span>Alternar Linterna</span></div>
-      </div>
-
-      <div class="ui-guide">
-        <div class="guide-col">
-          <span class="guide-bullet blue"></span> <strong>Salud Diegética:</strong> Sensor luminoso 3D en la espalda del RIG. (Azul = Saludable, Naranja = Herido, Rojo parpadeante = Crítico).
-        </div>
-        <div class="guide-col">
-          <span class="guide-bullet cyan"></span> <strong>Munición Holográfica:</strong> Proyectada directamente junto al arma.
-        </div>
-        <div class="guide-col">
-          <span class="guide-bullet cyan"></span> <strong>Estasis en la Espalda:</strong> Medidor circular en el omóplato derecho (Cian: 3, Naranja: 2, Rojo: 1, Apagado: 0).
-        </div>
-      </div>
-
-      <button id="btn-start" class="cec-button">INICIAR MISIÓN</button>
-      <button id="btn-settings-start" class="cec-button secondary">CONFIGURACIÓN</button>
-      <div class="audio-notice">* El audio procedural de Web Audio API se activará al hacer clic.</div>
-    </div>
-  </div>
-
-  <!-- Pause Screen -->
-  <div id="pause-screen" class="overlay-modal">
-    <div class="modal-card small">
-      <h2 class="pause-title">SISTEMA EN PAUSA</h2>
-      <p class="pause-text">Transmisión suspendida. Haz clic para reanudar el enlace neuronal.</p>
-      <button id="btn-resume" class="cec-button">REANUDAR</button>
-      <button id="btn-settings-pause" class="cec-button secondary">CONFIGURACIÓN</button>
-      <button id="btn-restart-pause" class="cec-button secondary">REINICIAR SECTOR</button>
-    </div>
-  </div>
-
-  <!-- Settings Modal -->
-  <div id="settings-screen" class="overlay-modal">
-    <div class="modal-card small settings-card">
-      <div class="suit-logo">C.E.C. SISTEMA // PREFERENCIAS</div>
-      <h2 class="settings-title">CONFIGURACIÓN DE CÁMARA</h2>
-
-      <div class="settings-group">
-        <label class="setting-item">
-          <div class="setting-text">
-            <span class="setting-name">Invertir Eje Y (Vertical)</span>
-            <span class="setting-desc">Invierte el cabeceo arriba / abajo</span>
-          </div>
-          <input type="checkbox" id="setting-invert-y" class="cec-checkbox">
-        </label>
-
-        <label class="setting-item">
-          <div class="setting-text">
-            <span class="setting-name">Invertir Eje X (Horizontal)</span>
-            <span class="setting-desc">Invierte el giro izquierda / derecha</span>
-          </div>
-          <input type="checkbox" id="setting-invert-x" class="cec-checkbox">
-        </label>
-
-        <div class="setting-item column">
-          <div class="setting-slider-header">
-            <span class="setting-name">Sensibilidad del Ratón</span>
-            <span class="setting-val" id="setting-sens-val">1.0x</span>
-          </div>
-          <input type="range" id="setting-sensitivity" min="0.4" max="2.6" step="0.1" value="1.0" class="cec-slider">
-        </div>
-      </div>
-
-      <div class="settings-actions">
-        <button id="btn-save-settings" class="cec-button">GUARDAR Y CERRAR</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Game Over Screen -->
-  <div id="death-screen" class="overlay-modal">
-    <div class="modal-card death-card">
-      <div class="alert-stripes"></div>
-      <h1 class="death-title">SEÑAL VITAL PERDIDA</h1>
-      <h2 class="death-subtitle">TRAJE RIG: OPERADOR FALLECIDO</h2>
-      <p class="death-desc">Has sucumbido ante los Necromorfos. Tus restos han sido asimilados por la nave.</p>
-      <button id="btn-restart-death" class="cec-button danger">REINTENTAR</button>
-    </div>
-  </div>
-
-  <!-- Victory Screen -->
-  <div id="victory-screen" class="overlay-modal">
-    <div class="modal-card victory-card">
-      <div class="alert-stripes"></div>
-      <h1 class="victory-title">EVACUACIÓN COMPLETADA</h1>
-      <h2 class="victory-subtitle">SECTOR ESCAPADO // CÁPSULA EN ÓRBITA</h2>
-      <p class="victory-desc">Has escapado con vida a bordo de la cápsula de escape. Las transmisiones de auxilio han sido emitidas al espacio profundo.</p>
-
-      <div class="stats-summary">
-        <div>NECROMORFOS ELIMINADOS: <span id="stat-kills" class="stat-num">0</span></div>
-        <div>EXTREMIDADES CORTADAS: <span id="stat-limbs" class="stat-num">0</span></div>
-      </div>
-
-      <button id="btn-restart-victory" class="cec-button victory">NUEVA INCURSIÓN</button>
-    </div>
-  </div>
+  <!-- Holographic stacked 3D menu (main / pause / end) — built by src/ui/HoloMenu.ts -->
+  <div id="holo-menu" class="holo-menu"></div>
 
   <!-- Module Logic -->
   <script type="module" src="game.ts"></script>

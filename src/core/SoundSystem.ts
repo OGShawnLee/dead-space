@@ -7,13 +7,14 @@ export class SoundSystem {
   initialized = false;
   masterGain: GainNode | null = null;
   droneOsc: OscillatorNode | null = null;
+  masterVolume = 0.55;
 
   init(): void {
     if (this.initialized) return;
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
     this.ctx = new AudioCtx();
     this.masterGain = this.ctx.createGain();
-    this.masterGain.gain.setValueAtTime(0.55, this.ctx.currentTime);
+    this.masterGain.gain.setValueAtTime(this.masterVolume, this.ctx.currentTime);
     this.masterGain.connect(this.ctx.destination);
     this.initialized = true;
     this.startAmbientDrone();
@@ -501,5 +502,57 @@ export class SoundSystem {
     filter.connect(droneGain);
     droneGain.connect(this.masterGain);
     this.droneOsc.start();
+  }
+  /** Sets master output volume (0..1). Applied immediately if the audio graph exists. */
+  setMasterVolume(v: number): void {
+    this.masterVolume = Math.max(0, Math.min(1, v));
+    if (this.ctx && this.masterGain) {
+      this.masterGain.gain.setTargetAtTime(this.masterVolume, this.ctx.currentTime, 0.03);
+    }
+  }
+
+  /** Short holographic tick used when moving focus between menu entries. */
+  playUiMove(): void {
+    this.uiBlip(1450, 1250, 0.05, 0.08, 'triangle');
+  }
+
+  /** Confirmation chirp when activating a menu entry. */
+  playUiSelect(): void {
+    this.uiBlip(880, 1760, 0.09, 0.14, 'square');
+  }
+
+  /** Descending chirp when backing out of a submenu. */
+  playUiBack(): void {
+    this.uiBlip(1100, 480, 0.1, 0.12, 'triangle');
+  }
+
+  /** Subtle pneumatic tick when adjusting sliders / toggles. */
+  playUiAdjust(): void {
+    this.uiBlip(2100, 1900, 0.035, 0.07, 'sine');
+  }
+
+  private uiBlip(f0: number, f1: number, dur: number, vol: number, type: OscillatorType): void {
+    if (!this.initialized || !this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    const filter = this.ctx.createBiquadFilter();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(f0, now);
+    osc.frequency.exponentialRampToValueAtTime(f1, now + dur);
+
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(3800, now);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(vol, now + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+
+    osc.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain);
+    osc.start(now);
+    osc.stop(now + dur + 0.02);
   }
 }

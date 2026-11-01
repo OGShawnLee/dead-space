@@ -32,6 +32,8 @@ export interface CameraSettings {
   invertY: boolean;
   invertX: boolean;
   sensitivity: number;
+  /** Master audio volume 0..1 (optional for backwards-compatible saved settings) */
+  volume?: number;
 }
 
 export interface PickupItem {

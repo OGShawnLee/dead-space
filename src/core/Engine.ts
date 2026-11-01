@@ -28,6 +28,15 @@ import { Necromorph } from '../entities/Necromorph';
 import { Exploder } from '../entities/Exploder';
 import { Leaper } from '../entities/Leaper';
 import { ThirdPersonCamera } from '../camera/ThirdPersonCamera';
+import { HoloMenu } from '../ui/HoloMenu';
+import {
+  buildMainMenu,
+  buildPauseMenu,
+  buildDeathMenu,
+  buildVictoryMenu,
+  DEFAULT_SETTINGS,
+  type MenuContext
+} from '../ui/GameMenus';
 import type { GibPart } from '../world/GibPart';
 import type { CameraSettings, LimbMesh } from '../types';
 
@@ -58,9 +67,11 @@ export class DeadSpaceGame {
   stasisProjectiles: StasisProjectile[] = [];
   statsKills = 0;
   statsLimbs = 0;
-  isPaused = false;
+  // Game starts frozen behind the main menu until "Nueva partida" is selected
+  isPaused = true;
+  missionStarted = false;
+  endScreenShown = false;
   gameWon = false;
-  settingsPreviousModal: 'start' | 'pause' = 'start';
 
   scene!: Scene;
   camera!: PerspectiveCamera;
@@ -74,6 +85,8 @@ export class DeadSpaceGame {
   cameraController!: ThirdPersonCamera;
   settings!: CameraSettings;
   input!: InputManager;
+  menu!: HoloMenu;
+  menuCtx!: MenuContext;
   clock = new Clock();
   promptTimeout?: ReturnType<typeof setTimeout>;
 
@@ -88,19 +101,20 @@ export class DeadSpaceGame {
 
     this.settings = this.loadSettings();
     this.cameraController.setSettings(this.settings);
+    this.sound.setMasterVolume(this.settings.volume ?? DEFAULT_SETTINGS.volume!);
 
     this.input = new InputManager({
       onToggleFlashlight: () => this.handleToggleFlashlight(),
       onReload: () => this.handleReload(),
       onHeal: () => this.handleHeal(),
-      onTogglePause: () => this.togglePause(),
+      onTogglePause: () => this.handleEscape(),
       onAimChange: (aiming) => this.handleAimChange(aiming),
       onShoot: () => this.shootPlasmaCutter(),
       onStasis: () => this.handleStasisFire()
     });
 
     this.spawnEnemies();
-    this.setupUI();
+    this.setupMenus();
 
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
@@ -110,16 +124,12 @@ export class DeadSpaceGame {
     try {
       const saved = localStorage.getItem('deadspace_settings');
       if (saved) {
-        return JSON.parse(saved);
+        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
       }
     } catch (e) {
       console.warn('Could not load settings from localStorage', e);
     }
-    return {
-      invertY: false,
-      invertX: false,
-      sensitivity: 1.0
-    };
+    return { ...DEFAULT_SETTINGS };
   }
 
   saveSettings(partial: Partial<CameraSettings>): void {
@@ -130,43 +140,7 @@ export class DeadSpaceGame {
       console.warn('Could not save settings to localStorage', e);
     }
     this.cameraController.setSettings(this.settings);
-  }
-
-  openSettings(fromModal: 'start' | 'pause'): void {
-    this.settingsPreviousModal = fromModal;
-    if (fromModal === 'start') {
-      const startModal = document.getElementById('start-screen');
-      if (startModal) startModal.classList.remove('active');
-    } else if (fromModal === 'pause') {
-      const pauseModal = document.getElementById('pause-screen');
-      if (pauseModal) pauseModal.classList.remove('active');
-    }
-
-    const chkY = document.getElementById('setting-invert-y') as HTMLInputElement | null;
-    const chkX = document.getElementById('setting-invert-x') as HTMLInputElement | null;
-    const rngSens = document.getElementById('setting-sensitivity') as HTMLInputElement | null;
-    const sensVal = document.getElementById('setting-sens-val');
-
-    if (chkY) chkY.checked = !!this.settings.invertY;
-    if (chkX) chkX.checked = !!this.settings.invertX;
-    if (rngSens) rngSens.value = String(this.settings.sensitivity || 1.0);
-    if (sensVal) sensVal.textContent = `${Number(this.settings.sensitivity || 1.0).toFixed(1)}x`;
-
-    const settingsModal = document.getElementById('settings-screen');
-    if (settingsModal) settingsModal.classList.add('active');
-  }
-
-  closeSettings(): void {
-    const settingsModal = document.getElementById('settings-screen');
-    if (settingsModal) settingsModal.classList.remove('active');
-
-    if (this.settingsPreviousModal === 'pause') {
-      const pauseModal = document.getElementById('pause-screen');
-      if (pauseModal) pauseModal.classList.add('active');
-    } else {
-      const startModal = document.getElementById('start-screen');
-      if (startModal) startModal.classList.add('active');
-    }
+    if (typeof this.settings.volume === 'number') this.sound.setMasterVolume(this.settings.volume);
   }
 
   initThree(): void {
@@ -265,7 +239,7 @@ export class DeadSpaceGame {
   }
 
   handleToggleFlashlight(): void {
-    if (this.player.isDead || this.gameWon) return;
+    if (this.isPaused || this.player.isDead || this.gameWon) return;
     const on = this.player.toggleFlashlight();
     const flBadge = document.getElementById('flashlight-status');
     if (flBadge) {
@@ -275,7 +249,7 @@ export class DeadSpaceGame {
   }
 
   handleReload(): void {
-    if (this.player.isDead || this.gameWon) return;
+    if (this.isPaused || this.player.isDead || this.gameWon) return;
     if (this.player.reload()) {
       this.showPrompt('Recargando Cortador de Plasma...');
     } else if (this.player.reserveAmmo <= 0) {
@@ -284,7 +258,7 @@ export class DeadSpaceGame {
   }
 
   handleHeal(): void {
-    if (this.player.isDead || this.gameWon) return;
+    if (this.isPaused || this.player.isDead || this.gameWon) return;
     if (this.player.heal()) {
       const medkitEl = document.getElementById('medkit-count');
       if (medkitEl) medkitEl.textContent = String(this.player.medkits);
@@ -295,7 +269,7 @@ export class DeadSpaceGame {
   }
 
   handleAimChange(aiming: boolean): void {
-    if (this.player.isDead || this.gameWon) return;
+    if (aiming && (this.isPaused || this.player.isDead || this.gameWon)) return;
     const crosshair = document.getElementById('crosshair');
     if (crosshair) {
       if (aiming) crosshair.classList.remove('crosshair-hidden');
@@ -362,7 +336,7 @@ export class DeadSpaceGame {
   }
 
   shootPlasmaCutter(): void {
-    if (!this.cameraController.isLocked || this.player.isDead || this.gameWon) return;
+    if (!this.cameraController.isLocked || this.isPaused || this.player.isDead || this.gameWon) return;
 
     if (this.player.ammo <= 0) {
       this.sound.playPlasmaEmpty();
@@ -516,110 +490,90 @@ export class DeadSpaceGame {
     }
   }
 
-  togglePause(): void {
-    const settingsModal = document.getElementById('settings-screen');
-    if (settingsModal && settingsModal.classList.contains('active')) {
-      this.closeSettings();
-      return;
-    }
+  // ───────────────────────────── Holographic menu flow ─────────────────────────────
 
-    this.isPaused = !this.isPaused;
-    const modal = document.getElementById('pause-screen');
-    if (modal) {
-      if (this.isPaused) {
-        modal.classList.add('active');
-        document.exitPointerLock();
-      } else {
-        modal.classList.remove('active');
-        this.container.requestPointerLock();
-      }
-    }
+  setupMenus(): void {
+    const menuRoot = document.getElementById('holo-menu') as HTMLElement;
+    this.menu = new HoloMenu(menuRoot, this.sound);
+
+    this.menuCtx = {
+      startMission: () => this.startMission(),
+      resume: () => this.resumeGame(),
+      restart: () => window.location.reload(),
+      back: () => this.menu.back(),
+      getSettings: () => this.settings,
+      saveSettings: (partial) => this.saveSettings(partial),
+      getStats: () => ({ kills: this.statsKills, limbs: this.statsLimbs })
+    };
+
+    // Losing pointer lock mid-mission (Esc, alt-tab, focus loss) opens the pause menu
+    document.addEventListener('pointerlockchange', () => {
+      if (!document.pointerLockElement) this.openPause();
+    });
+
+    document.body.classList.add('in-main-menu');
+    this.menu.open(buildMainMenu(this.menuCtx), 'main');
+  }
+
+  startMission(): void {
+    this.sound.init();
+    this.sound.resume();
+    this.missionStarted = true;
+    this.isPaused = false;
+    // Snap the camera back behind Isaac after the main-menu orbit
+    this.cameraController.yaw = this.player.root.rotation.y;
+    this.cameraController.pitch = 0;
+    this.resetInputState();
+    this.menu.close();
+    document.body.classList.remove('in-main-menu');
+    this.clock.getDelta(); // discard menu time
+    this.container.requestPointerLock();
+  }
+
+  handleEscape(): void {
+    // While a menu is open, HoloMenu consumes Esc itself (back / resume)
+    if (this.menu && this.menu.isOpen) return;
+    this.openPause();
+  }
+
+  openPause(): void {
+    if (!this.missionStarted || this.isPaused || this.player.isDead || this.gameWon) return;
+    this.isPaused = true;
+    this.resetInputState();
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.menu.open(buildPauseMenu(this.menuCtx), 'pause', {
+      onBackAtRoot: () => this.resumeGame()
+    });
+  }
+
+  resumeGame(): void {
+    if (!this.isPaused || !this.missionStarted || this.endScreenShown) return;
+    this.menu.close();
+    this.isPaused = false;
+    this.resetInputState();
+    this.clock.getDelta(); // discard the time spent paused
+    this.container.requestPointerLock();
+  }
+
+  resetInputState(): void {
+    const s = this.input.state;
+    s.forward = s.backward = s.strafeLeft = s.strafeRight = s.sprint = s.aiming = false;
+    this.handleAimChange(false);
   }
 
   triggerGameOver(): void {
-    document.exitPointerLock();
-    const deathModal = document.getElementById('death-screen');
-    if (deathModal) deathModal.classList.add('active');
+    if (this.endScreenShown) return;
+    this.endScreenShown = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.menu.open(buildDeathMenu(this.menuCtx), 'end');
   }
 
   triggerVictory(): void {
+    if (this.endScreenShown) return;
     this.gameWon = true;
-    document.exitPointerLock();
-    const winModal = document.getElementById('victory-screen');
-    if (winModal) {
-      const killsEl = document.getElementById('stat-kills');
-      const limbsEl = document.getElementById('stat-limbs');
-      if (killsEl) killsEl.textContent = `${this.statsKills}`;
-      if (limbsEl) limbsEl.textContent = `${this.statsLimbs}`;
-      winModal.classList.add('active');
-    }
-  }
-
-  setupUI(): void {
-    const btnStart = document.getElementById('btn-start');
-    if (btnStart) {
-      btnStart.addEventListener('click', () => {
-        this.sound.init();
-        this.sound.resume();
-        const startScreen = document.getElementById('start-screen');
-        if (startScreen) startScreen.classList.remove('active');
-        this.container.requestPointerLock();
-      });
-    }
-
-    const btnResume = document.getElementById('btn-resume');
-    if (btnResume) {
-      btnResume.addEventListener('click', () => {
-        this.togglePause();
-      });
-    }
-
-    const btnSettingsStart = document.getElementById('btn-settings-start');
-    if (btnSettingsStart) {
-      btnSettingsStart.addEventListener('click', () => this.openSettings('start'));
-    }
-
-    const btnSettingsPause = document.getElementById('btn-settings-pause');
-    if (btnSettingsPause) {
-      btnSettingsPause.addEventListener('click', () => this.openSettings('pause'));
-    }
-
-    const btnSaveSettings = document.getElementById('btn-save-settings');
-    if (btnSaveSettings) {
-      btnSaveSettings.addEventListener('click', () => this.closeSettings());
-    }
-
-    const chkY = document.getElementById('setting-invert-y');
-    if (chkY) {
-      chkY.addEventListener('change', (e: Event) => {
-        this.saveSettings({ invertY: (e.target as HTMLInputElement).checked });
-      });
-    }
-
-    const chkX = document.getElementById('setting-invert-x');
-    if (chkX) {
-      chkX.addEventListener('change', (e: Event) => {
-        this.saveSettings({ invertX: (e.target as HTMLInputElement).checked });
-      });
-    }
-
-    const rngSens = document.getElementById('setting-sensitivity');
-    const sensVal = document.getElementById('setting-sens-val');
-    if (rngSens) {
-      rngSens.addEventListener('input', (e: Event) => {
-        const val = parseFloat((e.target as HTMLInputElement).value);
-        if (sensVal) sensVal.textContent = `${val.toFixed(1)}x`;
-        this.saveSettings({ sensitivity: val });
-      });
-    }
-
-    const reloadGame = (): void => window.location.reload();
-    const restartPause = document.getElementById('btn-restart-pause');
-    if (restartPause) restartPause.addEventListener('click', reloadGame);
-    const restartDeath = document.getElementById('btn-restart-death');
-    if (restartDeath) restartDeath.addEventListener('click', reloadGame);
-    const restartVictory = document.getElementById('btn-restart-victory');
-    if (restartVictory) restartVictory.addEventListener('click', reloadGame);
+    this.endScreenShown = true;
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.menu.open(buildVictoryMenu(this.menuCtx), 'end');
   }
 
   animate(): void {
@@ -627,6 +581,13 @@ export class DeadSpaceGame {
 
     const dt = Math.min(this.clock.getDelta(), 0.1);
     const elapsedTime = this.clock.getElapsedTime();
+
+    if (this.isPaused && !this.missionStarted) {
+      // Main menu backdrop: slow cinematic orbit around Isaac in the start room
+      this.level.update(dt, elapsedTime);
+      this.cameraController.yaw += dt * 0.07;
+      this.cameraController.update(dt, this.level.colliders);
+    }
 
     if (!this.isPaused) {
       this.level.update(dt, elapsedTime);
@@ -702,8 +663,7 @@ export class DeadSpaceGame {
       this.bloodSys.update(dt);
       this.checkPickupsAndEscape();
 
-      const deathScreen = document.getElementById('death-screen');
-      if (this.player.isDead && deathScreen && !deathScreen.classList.contains('active')) {
+      if (this.player.isDead && !this.endScreenShown) {
         this.triggerGameOver();
       }
     }
