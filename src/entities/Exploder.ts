@@ -32,6 +32,7 @@ export class Exploder {
   hp = 100;
   isDead = false;
   exploded = false;
+  killCounted = false;
   state: 'PATROL' | 'CHASE' = 'PATROL';
   patrolTimer = 0;
   patrolDir = Math.random() * Math.PI * 2;
@@ -283,6 +284,7 @@ export class Exploder {
     this.exploded = true;
     this.isDead = true;
     this.hasSac = false;
+    this.hp = 0;
 
     const blastCenter = new Vector3();
     if (this.sacGroup) {
@@ -292,13 +294,94 @@ export class Exploder {
     }
 
     this.sound.playExplosion();
-    this.bloodSys.spawnExplosionBlast(blastCenter, 60);
+    this.bloodSys.spawnExplosionBlast(blastCenter, 80);
+    this.bloodSys.spawnSplatter(blastCenter, new Vector3(0, 1, 0), 45);
 
-    if (this.sacGroup && this.sacGroup.parent) {
-      this.sacGroup.parent.remove(this.sacGroup);
+    // Turn all remaining body parts into physical bouncing GibParts
+    const spawnPartGib = (mesh: Mesh | Group, baseGeo?: BoxGeometry): void => {
+      const worldPos = new Vector3();
+      const worldQuat = new Quaternion();
+      mesh.getWorldPosition(worldPos);
+      mesh.getWorldQuaternion(worldQuat);
+
+      const awayDir = new Vector3().subVectors(worldPos, blastCenter);
+      if (awayDir.lengthSq() < 0.01) {
+        awayDir.set((Math.random() - 0.5) * 2, 0.5, (Math.random() - 0.5) * 2);
+      }
+      awayDir.normalize();
+
+      // Explosive velocity: outward and upward arc
+      const impulse = awayDir.multiplyScalar(3.2 + Math.random() * 3.0);
+      impulse.y = Math.max(impulse.y, 1.8) + Math.random() * 2.2;
+
+      let geo: any;
+      if (baseGeo) {
+        geo = baseGeo;
+      } else if (mesh instanceof Mesh && mesh.geometry) {
+        geo = mesh.geometry.clone();
+      } else {
+        geo = new BoxGeometry(0.2, 0.55, 0.2);
+      }
+
+      this.gibList.push(new GibPart(this.scene, geo, this.matSkin, worldPos, worldQuat, impulse));
+    };
+
+    // 1. Head gib
+    if (this.hasHead && this.headMesh) {
+      spawnPartGib(this.headMesh, new BoxGeometry(0.28, 0.32, 0.32));
     }
+
+    // 2. Right Arm gib
+    if (this.hasArmR && this.armRGroup) {
+      spawnPartGib(this.armRGroup, new BoxGeometry(0.16, 0.55, 0.16));
+    }
+
+    // 3. Left Leg gib
+    if (this.hasLegL && this.legLGroup) {
+      spawnPartGib(this.legLGroup, new BoxGeometry(0.18, 0.72, 0.18));
+    }
+
+    // 4. Right Leg gib
+    if (this.hasLegR && this.legRGroup) {
+      spawnPartGib(this.legRGroup, new BoxGeometry(0.18, 0.72, 0.18));
+    }
+
+    // 5. Shattered Torso meaty gibs (flesh & rib chunks)
+    const torsoPos = new Vector3();
+    const torsoQuat = new Quaternion();
+    this.torsoMesh.getWorldPosition(torsoPos);
+    this.torsoMesh.getWorldQuaternion(torsoQuat);
+
+    const chunkGeos = [
+      new BoxGeometry(0.34, 0.38, 0.28),
+      new BoxGeometry(0.28, 0.30, 0.24),
+      new BoxGeometry(0.22, 0.24, 0.20)
+    ];
+
+    chunkGeos.forEach(cGeo => {
+      const cPos = torsoPos.clone().add(new Vector3(
+        (Math.random() - 0.5) * 0.3,
+        (Math.random() - 0.5) * 0.3,
+        (Math.random() - 0.5) * 0.3
+      ));
+      const cDir = new Vector3().subVectors(cPos, blastCenter);
+      if (cDir.lengthSq() < 0.01) {
+        cDir.set((Math.random() - 0.5) * 2, 0.5, (Math.random() - 0.5) * 2);
+      }
+      cDir.normalize().multiplyScalar(2.8 + Math.random() * 2.8);
+      cDir.y = Math.max(cDir.y, 1.4) + Math.random() * 1.8;
+
+      this.gibList.push(new GibPart(this.scene, cGeo, this.matSkin, cPos, torsoQuat, cDir));
+    });
+
+    // Remove the body and lights completely from scene so no frozen mannequin remains
     if (this.sacLight && this.sacLight.parent) {
       this.sacLight.parent.remove(this.sacLight);
+    }
+    if (this.root && this.root.parent) {
+      this.root.parent.remove(this.root);
+    } else {
+      this.scene.remove(this.root);
     }
 
     if (this.onExplosionCallback) {

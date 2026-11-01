@@ -694,7 +694,7 @@ export class DeadSpaceGame {
       });
 
       for (let i = this.gibs.length - 1; i >= 0; i--) {
-        if (!this.gibs[i].update(dt)) {
+        if (!this.gibs[i].update(dt, this.level.colliders)) {
           this.gibs.splice(i, 1);
         }
       }
