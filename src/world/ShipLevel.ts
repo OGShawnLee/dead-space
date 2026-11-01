@@ -90,12 +90,6 @@ export class ShipLevel {
       }
     };
 
-    carveRoom(3, 3, 3, 3, 2); // Start room
-    carveRoom(N - 4, N - 4, 3, 3, 3); // Escape room
-    carveRoom(N - 4, 3, 3, 3, 4); // Storage 1
-    carveRoom(3, N - 4, 3, 3, 4); // Storage 2
-    carveRoom(Math.floor(N / 2), Math.floor(N / 2), 4, 4, 0); // Center
-
     const connect = (x1: number, z1: number, x2: number, z2: number): void => {
       let cx = x1;
       let cz = z1;
@@ -109,6 +103,7 @@ export class ShipLevel {
       }
     };
 
+    // 1. Connect corridors between rooms
     connect(3, 3, Math.floor(N / 2), Math.floor(N / 2));
     connect(Math.floor(N / 2), Math.floor(N / 2), N - 4, N - 4);
     connect(3, 3, 3, N - 4);
@@ -116,10 +111,24 @@ export class ShipLevel {
     connect(N - 4, 3, N - 4, N - 4);
     connect(3, 3, N - 4, 3);
 
+    // 2. Carve rooms after corridors so room values and tags are cleanly preserved
+    carveRoom(Math.floor(N / 2), Math.floor(N / 2), 4, 4, 0); // Center large room
+    carveRoom(N - 4, 3, 3, 3, 4); // Storage 1
+    carveRoom(3, N - 4, 3, 3, 4); // Storage 2
+    carveRoom(3, 3, 3, 3, 2); // Start isolated room (val = 2)
+    carveRoom(N - 4, N - 4, 3, 3, 3); // Escape room (val = 3)
+
     const wallGeo = new BoxGeometry(this.cellSize, this.wallHeight, this.cellSize);
     const floorGeo = new PlaneGeometry(this.cellSize, this.cellSize);
     const ceilingGeo = new PlaneGeometry(this.cellSize, this.cellSize);
     const halfW = (N * this.cellSize) / 2;
+
+    // Explicitly set player start position at center of start room (3, 3)
+    this.playerStart.set(
+      3 * this.cellSize - halfW + this.cellSize / 2,
+      0,
+      3 * this.cellSize - halfW + this.cellSize / 2
+    );
 
     for (let z = 0; z < N; z++) {
       for (let x = 0; x < N; x++) {
@@ -147,9 +156,7 @@ export class ShipLevel {
           this.scene.add(ceilMesh);
 
           if (val === 2) {
-            if (x === 3 && z === 3) {
-              this.playerStart.set(wx, 0, wz);
-            }
+            // Player start room: no enemies spawn here
           } else if (val === 3) {
             // Only spawn escape chamber and escape zone once at center of escape room
             if (x === N - 4 && z === N - 4) {
