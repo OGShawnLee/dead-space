@@ -15,6 +15,7 @@ import {
 } from 'three';
 import { TextureFactory } from '../graphics/TextureFactory';
 import type { PickupItem, EscapeZone } from '../types';
+import type { ItemId } from '../inventory/ItemDefs';
 
 export interface FlickerLightItem {
   light: PointLight;
@@ -177,7 +178,7 @@ export class ShipLevel {
 
             if (Math.random() < 0.22) {
               const r = Math.random();
-              const pickupType: 'ammo' | 'medkit' | 'stasis' = r < 0.45 ? 'ammo' : (r < 0.75 ? 'medkit' : 'stasis');
+              const pickupType: ItemId = r < 0.45 ? 'plasma_energy' : (r < 0.75 ? 'med_small' : 'stasis_pack');
               this.createPickup(wx, wz, pickupType);
             }
           }
@@ -245,10 +246,10 @@ export class ShipLevel {
     this.scene.add(screen);
   }
 
-  createPickup(x: number, z: number, type: 'ammo' | 'medkit' | 'stasis'): void {
+  createPickup(x: number, z: number, type: ItemId): void {
     const group = new Group();
 
-    if (type === 'ammo') {
+    if (type === 'plasma_energy') {
       const geo = new BoxGeometry(0.45, 0.25, 0.35);
       const mat = new MeshStandardMaterial({
         color: 0x00a8cc,
@@ -260,7 +261,7 @@ export class ShipLevel {
       group.add(mesh);
       const pl = new PointLight(0x00e5ff, 0.6, 2.5);
       group.add(pl);
-    } else if (type === 'stasis') {
+    } else if (type === 'stasis_pack') {
       // Hexagonal Stasis Recharge Battery Pack
       const geo = new CylinderGeometry(0.18, 0.18, 0.4, 6);
       const mat = new MeshStandardMaterial({
@@ -300,7 +301,7 @@ export class ShipLevel {
 
     this.pickups.push({
       group: group,
-      type: type,
+      itemId: type,
       picked: false,
       rotSpeed: Math.random() * 1.5 + 1.0
     });

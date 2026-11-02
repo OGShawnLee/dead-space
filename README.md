@@ -131,9 +131,9 @@ Each Necromorph features an independent hitbox hierarchy:
 | <kbd>C</kbd> / <kbd>E</kbd> / <kbd>Middle Click</kbd> | Fire Stasis Module (While Aiming) |
 | <kbd>Left Shift</kbd> | Sprint |
 | <kbd>R</kbd> | Reload Plasma Cutter magazine |
-| <kbd>Q</kbd> | Inject Medkit (+50 RIG Health) |
+| <kbd>Tab</kbd> | Open / close the holographic inventory (real-time, Isaac stands still). Use med packs and stasis packs from there |
 | <kbd>F</kbd> | Toggle Tactical Flashlight |
-| <kbd>Escape</kbd> | Pause game & release mouse pointer lock |
+| <kbd>Escape</kbd> | Close the inventory if open, otherwise pause the game & release the mouse |
 
 ---
 

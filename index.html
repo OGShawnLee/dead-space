@@ -22,59 +22,20 @@
   <div class="vignette-overlay"></div>
   <div id="damage-flash" class="damage-flash"></div>
 
-  <!-- Diegetic In-World HUD -->
+  <!-- Zero-HUD: only the aim reticle and the pickup/status toast remain on screen.
+       Health, stasis and ammo are diegetic (on Isaac); everything else lives in the inventory. -->
   <div id="hud">
-    <!-- Top Left Sector Status & Objective Info -->
-    <div class="hud-top-left">
-      <div class="rig-status-badge">
-        <span class="rig-pulse"></span>
-        <span class="rig-text">C.E.C. RIG ENLAZADO // BIOS V4.2</span>
-      </div>
-      <div class="hud-health-bar-container">
-        <span class="rig-health-label">RIG VITAL:</span>
-        <div id="rig-segments" class="rig-segments">
-          <div class="segment active"></div>
-          <div class="segment active"></div>
-          <div class="segment active"></div>
-          <div class="segment active"></div>
-          <div class="segment active"></div>
-          <div class="segment active"></div>
-        </div>
-        <span id="hud-hp-val" class="rig-hp-val">100%</span>
-      </div>
-      <div class="hud-objective-box">
-        <div class="objective-header">MISIÓN PRIORITARIA</div>
-        <div class="objective-desc" id="objective-text">Explora los sectores oscuros y llega a la CÁPSULA DE ESCAPE.</div>
-      </div>
-      <div class="threat-counter">
-        AMENAZAS ACTIVAS: <span id="enemies-alive-count" class="highlight-val">--</span>
-      </div>
-    </div>
-
-    <!-- Top Right Medkit / Inventory Quick Display -->
-    <div class="hud-top-right">
-      <div class="supply-box">
-        <div class="supply-label">BOTIQUINES [Q]</div>
-        <div class="supply-value" id="medkit-count">2</div>
-      </div>
-      <div class="supply-box">
-        <div class="supply-label">LINTERNA [F]</div>
-        <div class="supply-value status-active" id="flashlight-status">ON</div>
-      </div>
-    </div>
-
-    <!-- Center Laser Reticle (Visible only when aiming) -->
     <div id="crosshair" class="crosshair-hidden">
       <div class="plasma-bracket left"></div>
       <div class="plasma-dot"></div>
       <div class="plasma-bracket right"></div>
     </div>
 
-    <!-- Bottom Center Contextual Notifications -->
-    <div id="prompt-bar" class="prompt-bar-hidden">
-      <span id="prompt-message">Presiona [R] para recargar</span>
-    </div>
+    <div id="pickup-toast" class="pickup-toast-hidden" role="status" aria-live="polite"></div>
   </div>
+
+  <!-- Holographic inventory (Tab) — built by src/ui/HoloInventory.ts -->
+  <div id="holo-inventory"></div>
 
   <!-- Holographic stacked 3D menu (main / pause / end) — built by src/ui/HoloMenu.ts -->
   <div id="holo-menu" class="holo-menu"></div>

@@ -32,12 +32,14 @@ export class InputManager {
         case 'KeyR':
           if (this.handlers.onReload) this.handlers.onReload();
           break;
-        case 'KeyQ':
-          if (this.handlers.onHeal) this.handlers.onHeal();
-          break;
         case 'KeyC':
         case 'KeyE':
           if (this.handlers.onStasis) this.handlers.onStasis();
+          break;
+        case 'Tab':
+          // Keep the browser from moving focus out of the game
+          e.preventDefault();
+          if (!e.repeat && this.handlers.onToggleInventory) this.handlers.onToggleInventory();
           break;
         case 'Escape':
           if (this.handlers.onTogglePause) this.handlers.onTogglePause();

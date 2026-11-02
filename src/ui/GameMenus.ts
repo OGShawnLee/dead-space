@@ -39,7 +39,7 @@ function controlsMenu(): MenuDef {
       row('stasis', 'Estasis', ['C', '/', 'E'], 'Mientras apuntas, lanza una carga de estasis que ralentiza a los necromorfos un 50% durante 5 segundos. También con clic central.'),
       row('reload', 'Recargar', ['R'], 'Inserta una nueva célula de plasma en el Cortador.'),
       row('sprint', 'Correr', ['SHIFT'], 'Acelera el paso. Hace más ruido y atrae a los necromorfos cercanos.'),
-      row('heal', 'Botiquín', ['Q'], 'Inyecta un botiquín médico del RIG y restaura 50 puntos de salud.'),
+      row('inventory', 'Inventario', ['TAB'], 'Abre el inventario holográfico. El juego no se detiene y Isaac queda quieto mientras lo usas. Desde ahí se usan botiquines y paquetes de estasis.'),
       row('light', 'Linterna', ['F'], 'Enciende o apaga la linterna montada en el hombro. Apagarla te oculta... y te deja a ciegas.'),
       row('pause', 'Pausa', ['ESC'], 'Suspende el enlace neuronal y abre el menú de pausa.')
     ]

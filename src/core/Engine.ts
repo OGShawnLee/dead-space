@@ -37,8 +37,22 @@ import {
   DEFAULT_SETTINGS,
   type MenuContext
 } from '../ui/GameMenus';
+import { getItem } from '../inventory/ItemDefs';
+import { InventoryTab } from '../inventory/tabs/InventoryTab';
+import { HoloInventory } from '../ui/HoloInventory';
 import type { GibPart } from '../world/GibPart';
-import type { CameraSettings, LimbMesh } from '../types';
+import type { CameraSettings, InputState, LimbMesh } from '../types';
+
+/** Input fed to the player while the inventory is open: Isaac is rooted. */
+const INACTIVE_INPUT: InputState = {
+  forward: false,
+  backward: false,
+  strafeLeft: false,
+  strafeRight: false,
+  aiming: false,
+  sprint: false
+};
+
 
 export type Enemy = (Necromorph | Exploder | Leaper) & {
   type?: string;
@@ -86,6 +100,8 @@ export class DeadSpaceGame {
   settings!: CameraSettings;
   input!: InputManager;
   menu!: HoloMenu;
+  holoInventory!: HoloInventory;
+  inventoryOpen = false;
   menuCtx!: MenuContext;
   clock = new Clock();
   promptTimeout?: ReturnType<typeof setTimeout>;
@@ -106,11 +122,11 @@ export class DeadSpaceGame {
     this.input = new InputManager({
       onToggleFlashlight: () => this.handleToggleFlashlight(),
       onReload: () => this.handleReload(),
-      onHeal: () => this.handleHeal(),
       onTogglePause: () => this.handleEscape(),
       onAimChange: (aiming) => this.handleAimChange(aiming),
       onShoot: () => this.shootPlasmaCutter(),
-      onStasis: () => this.handleStasisFire()
+      onStasis: () => this.handleStasisFire(),
+      onToggleInventory: () => this.handleToggleInventory()
     });
 
     this.spawnEnemies();
@@ -184,7 +200,6 @@ export class DeadSpaceGame {
       }
       this.enemies.push(enemy);
     });
-    this.updateThreatCounter();
   }
 
   handleExplosionAoE(blastPos: Vector3, radius: number, maxDmg: number, _byPlayer: boolean): void {
@@ -230,26 +245,19 @@ export class DeadSpaceGame {
         if (other.isDead && !other.killCounted) {
           other.killCounted = true;
           this.statsKills++;
-          this.updateThreatCounter();
         }
       }
     });
 
-    this.updateThreatCounter();
   }
 
   handleToggleFlashlight(): void {
-    if (this.isPaused || this.player.isDead || this.gameWon) return;
-    const on = this.player.toggleFlashlight();
-    const flBadge = document.getElementById('flashlight-status');
-    if (flBadge) {
-      flBadge.textContent = on ? 'ON' : 'OFF';
-      flBadge.className = on ? 'supply-value status-active' : 'supply-value';
-    }
+    if (this.isPaused || this.inventoryOpen || this.player.isDead || this.gameWon) return;
+    this.player.toggleFlashlight();
   }
 
   handleReload(): void {
-    if (this.isPaused || this.player.isDead || this.gameWon) return;
+    if (this.isPaused || this.inventoryOpen || this.player.isDead || this.gameWon) return;
     if (this.player.reload()) {
       this.showPrompt('Recargando Cortador de Plasma...');
     } else if (this.player.reserveAmmo <= 0) {
@@ -257,19 +265,8 @@ export class DeadSpaceGame {
     }
   }
 
-  handleHeal(): void {
-    if (this.isPaused || this.player.isDead || this.gameWon) return;
-    if (this.player.heal()) {
-      const medkitEl = document.getElementById('medkit-count');
-      if (medkitEl) medkitEl.textContent = String(this.player.medkits);
-      this.showPrompt('+50 Salud inyectada');
-    } else if (this.player.medkits <= 0) {
-      this.showPrompt('¡No tienes botiquines!');
-    }
-  }
-
   handleAimChange(aiming: boolean): void {
-    if (aiming && (this.isPaused || this.player.isDead || this.gameWon)) return;
+    if (aiming && (this.isPaused || this.inventoryOpen || this.player.isDead || this.gameWon)) return;
     const crosshair = document.getElementById('crosshair');
     if (crosshair) {
       if (aiming) crosshair.classList.remove('crosshair-hidden');
@@ -278,7 +275,7 @@ export class DeadSpaceGame {
   }
 
   handleStasisFire(): void {
-    if (this.player.isDead || this.gameWon || !this.cameraController.isLocked) return;
+    if (this.inventoryOpen || this.player.isDead || this.gameWon || !this.cameraController.isLocked) return;
 
     if (!this.player.isAiming) {
       this.showPrompt('¡Apunta para disparar el Módulo de Estabilización!');
@@ -336,7 +333,7 @@ export class DeadSpaceGame {
   }
 
   shootPlasmaCutter(): void {
-    if (!this.cameraController.isLocked || this.isPaused || this.player.isDead || this.gameWon) return;
+    if (!this.cameraController.isLocked || this.isPaused || this.inventoryOpen || this.player.isDead || this.gameWon) return;
 
     if (this.player.ammo <= 0) {
       this.sound.playPlasmaEmpty();
@@ -399,7 +396,6 @@ export class DeadSpaceGame {
                 enemy.killCounted = true;
                 this.statsKills++;
               }
-              this.updateThreatCounter();
             } else {
               this.bloodSys.spawnSplatter(hit.point, hitNormal, 15);
             }
@@ -442,23 +438,20 @@ export class DeadSpaceGame {
       if (!item.picked) {
         const d = pPos.distanceTo(item.group.position);
         if (d < 1.4) {
+          const def = getItem(item.itemId);
+          const inv = this.player.inventory;
+          // Auto-pickup only when the whole pickup fits; otherwise it stays in the world
+          if (inv.spaceFor(def.id) < def.pickupAmount) {
+            this.showPrompt(`Inventario lleno: ${def.name}`);
+            return;
+          }
+
           item.picked = true;
           this.scene.remove(item.group);
-
-          if (item.type === 'ammo') {
-            this.player.reserveAmmo += 15;
-            this.player.updateHoloAmmo();
-            this.showPrompt('+15 Células de Plasma recogidas');
-          } else if (item.type === 'stasis') {
-            this.player.rechargeStasis(3);
-            this.showPrompt('+3 Cargas de Estabilización recargadas');
-          } else {
-            this.player.medkits++;
-            const medkitEl = document.getElementById('medkit-count');
-            if (medkitEl) medkitEl.textContent = String(this.player.medkits);
-            this.showPrompt('+1 Botiquín RIG recogido');
-          }
+          inv.add(def.id, def.pickupAmount);
+          this.showPrompt(`+${def.pickupAmount} ${def.name}`);
           this.sound.playFlashlight();
+
         }
       }
     });
@@ -471,23 +464,13 @@ export class DeadSpaceGame {
     }
   }
 
-  updateThreatCounter(): void {
-    const alive = this.enemies.filter(e => !e.isDead).length;
-    const el = document.getElementById('enemies-alive-count');
-    if (el) el.textContent = `${alive}`;
-  }
-
   showPrompt(msg: string): void {
-    const bar = document.getElementById('prompt-bar');
-    const txt = document.getElementById('prompt-message');
-    if (bar && txt) {
-      txt.textContent = msg;
-      bar.classList.remove('prompt-bar-hidden');
-      if (this.promptTimeout) clearTimeout(this.promptTimeout);
-      this.promptTimeout = setTimeout(() => {
-        bar.classList.add('prompt-bar-hidden');
-      }, 2500);
-    }
+    const toast = document.getElementById('pickup-toast');
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.remove('pickup-toast-hidden');
+    if (this.promptTimeout) clearTimeout(this.promptTimeout);
+    this.promptTimeout = setTimeout(() => toast.classList.add('pickup-toast-hidden'), 2500);
   }
 
   // ───────────────────────────── Holographic menu flow ─────────────────────────────
@@ -506,9 +489,22 @@ export class DeadSpaceGame {
       getStats: () => ({ kills: this.statsKills, limbs: this.statsLimbs })
     };
 
-    // Losing pointer lock mid-mission (Esc, alt-tab, focus loss) opens the pause menu
+    this.holoInventory = new HoloInventory(
+      document.getElementById('holo-inventory') as HTMLElement,
+      {
+        inventory: this.player.inventory,
+        player: this.player,
+        sound: this.sound,
+        notify: (msg) => this.showPrompt(msg)
+      },
+      () => this.closeInventory()
+    );
+    this.holoInventory.register(new InventoryTab());
+
+    // Losing pointer lock mid-mission (Esc, alt-tab, focus loss) opens the pause menu,
+    // except when it was released on purpose to browse the inventory
     document.addEventListener('pointerlockchange', () => {
-      if (!document.pointerLockElement) this.openPause();
+      if (!document.pointerLockElement && !this.inventoryOpen) this.openPause();
     });
 
     document.body.classList.add('in-main-menu');
@@ -528,6 +524,37 @@ export class DeadSpaceGame {
     document.body.classList.remove('in-main-menu');
     this.clock.getDelta(); // discard menu time
     this.container.requestPointerLock();
+  }
+
+  handleToggleInventory(): void {
+    if (this.inventoryOpen) this.closeInventory();
+    else this.openInventory();
+  }
+
+  openInventory(): void {
+    if (this.inventoryOpen || !this.missionStarted || this.isPaused) return;
+    if (this.player.isDead || this.gameWon || this.endScreenShown || this.menu.isOpen) return;
+
+    // Set first: releasing the pointer lock must not be read as "open the pause menu"
+    this.inventoryOpen = true;
+    this.resetInputState();
+    this.cameraController.setInventoryShot(true, this.level.colliders);
+    if (document.pointerLockElement) document.exitPointerLock();
+    this.holoInventory.open();
+    this.sound.init();
+    this.sound.resume();
+    this.sound.playUiSelect();
+  }
+
+  /** The game keeps running while the inventory is open, so closing never needs to resume. */
+  closeInventory(relock = true): void {
+    if (!this.inventoryOpen) return;
+    this.inventoryOpen = false;
+    this.holoInventory.close();
+    this.cameraController.setInventoryShot(false);
+    this.resetInputState();
+    this.sound.playUiBack();
+    if (relock) this.container.requestPointerLock();
   }
 
   handleEscape(): void {
@@ -564,6 +591,7 @@ export class DeadSpaceGame {
   triggerGameOver(): void {
     if (this.endScreenShown) return;
     this.endScreenShown = true;
+    this.closeInventory(false);
     if (document.pointerLockElement) document.exitPointerLock();
     this.menu.open(buildDeathMenu(this.menuCtx), 'end');
   }
@@ -572,6 +600,7 @@ export class DeadSpaceGame {
     if (this.endScreenShown) return;
     this.gameWon = true;
     this.endScreenShown = true;
+    this.closeInventory(false);
     if (document.pointerLockElement) document.exitPointerLock();
     this.menu.open(buildVictoryMenu(this.menuCtx), 'end');
   }
@@ -591,7 +620,7 @@ export class DeadSpaceGame {
 
     if (!this.isPaused) {
       this.level.update(dt, elapsedTime);
-      this.player.update(dt, this.input.state, this.level.colliders);
+      this.player.update(dt, this.inventoryOpen ? INACTIVE_INPUT : this.input.state, this.level.colliders);
       this.cameraController.update(dt, this.level.colliders);
 
       // Update Stasis Projectiles

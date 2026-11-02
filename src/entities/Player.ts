@@ -23,6 +23,7 @@ import {
 import { TextureFactory } from '../graphics/TextureFactory';
 import type { SoundSystem } from '../core/SoundSystem';
 import type { InputState } from '../types';
+import { Inventory } from '../inventory/Inventory';
 
 /**
  * Isaac Clarke Player Entity
@@ -36,12 +37,12 @@ import type { InputState } from '../types';
  * - Camera proximity occlusion fade (becomes transparent when camera is close)
  */
 export class Player {
+  /** Everything Isaac carries (ammo reserve, med packs, stasis packs, weapons). */
+  inventory = new Inventory();
   maxHp = 100;
   hp = 100;
-  medkits = 2;
   ammo = 10;
   maxAmmo = 10;
-  reserveAmmo = 30;
   isDead = false;
 
   // Stasis Module (Suit Level 1: 3 charges, 50% slow)
@@ -91,6 +92,11 @@ export class Player {
   constructor(public scene: Scene, public sound: SoundSystem, startPos: Vector3) {
     this.root.position.copy(startPos);
     this.scene.add(this.root);
+
+    // Starting loadout
+    this.inventory.add('plasma_cutter', 1);
+    this.inventory.add('plasma_energy', 30);
+    this.inventory.add('med_small', 2);
 
     this.buildSuitMesh();
     this.buildPlasmaCutter();
@@ -333,12 +339,15 @@ export class Player {
       transparent: true,
       opacity: 0.95,
       side: DoubleSide,
-      depthWrite: false
+      depthWrite: false,
+      // Never clipped by Isaac's arm/torso; the screen is a projected overlay on the weapon
+      depthTest: false
     });
     this.holoScreen = new Mesh(holoScreenGeo, holoScreenMat);
     // Directly perpendicular to X and Y axes of the gun, facing the player/camera
-    this.holoScreen.position.set(0.12, 0.18, 0.0);
+    this.holoScreen.position.set(0.17, 0.2, 0.0);
     this.holoScreen.rotation.set(0, Math.PI, 0);
+    this.holoScreen.renderOrder = 10;
     this.weaponGroup.add(this.holoScreen);
 
     // Dynamic holographic glow light
@@ -410,22 +419,6 @@ export class Player {
       this.rigBackLight.color.setHex(segColor);
       this.rigBackLight.intensity = healthFrac > 0.25 ? 1.5 : 2.5;
     }
-
-    const segmentsEl = document.getElementById('rig-segments');
-    if (segmentsEl) {
-      const segDoms = segmentsEl.querySelectorAll('.segment');
-      segDoms.forEach((dom, i) => {
-        dom.className = 'segment';
-        if (i < activeSegments) {
-          if (healthFrac > 0.6) dom.classList.add('active');
-          else if (healthFrac > 0.25) dom.classList.add('warn');
-          else dom.classList.add('crit');
-        }
-      });
-    }
-
-    const hpNumEl = document.getElementById('hud-hp-val');
-    if (hpNumEl) hpNumEl.textContent = `${Math.round(this.hp)}%`;
   }
 
   updateStasisMeter(): void {
@@ -548,10 +541,15 @@ export class Player {
     }
   }
 
-  heal(): boolean {
-    if (this.medkits <= 0 || this.hp >= this.maxHp || this.isDead) return false;
-    this.medkits--;
-    this.hp = Math.min(this.maxHp, this.hp + 50);
+  /** Reserve plasma cells, stored in the inventory. */
+  get reserveAmmo(): number {
+    return this.inventory.count('plasma_energy');
+  }
+
+  /** Effect of a med pack. Consumption is handled by the inventory. */
+  applyHealing(amount: number): boolean {
+    if (this.hp >= this.maxHp || this.isDead) return false;
+    this.hp = Math.min(this.maxHp, this.hp + amount);
     this.updateRigSpine();
     this.sound.playMedkit();
     return true;
@@ -560,9 +558,8 @@ export class Player {
   reload(): boolean {
     if (this.ammo >= this.maxAmmo || this.reserveAmmo <= 0 || this.isDead) return false;
     const needed = this.maxAmmo - this.ammo;
-    const toLoad = Math.min(needed, this.reserveAmmo);
+    const toLoad = this.inventory.remove('plasma_energy', needed);
     this.ammo += toLoad;
-    this.reserveAmmo -= toLoad;
     this.updateHoloAmmo();
     this.sound.playReload();
     return true;
