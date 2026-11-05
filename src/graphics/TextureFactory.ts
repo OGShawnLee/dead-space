@@ -1,5 +1,5 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace } from 'three';
-import { PALETTE, hex } from './Palette';
+import { PALETTE, hex, rgba } from './Palette';
 
 /**
  * Procedural Texture Generator
@@ -472,7 +472,7 @@ export class TextureFactory {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = hex(PALETTE.rust.bronze);
+    ctx.strokeStyle = hex(PALETTE.suit.copper);
     ctx.lineWidth = 1;
     for (let y = 10; y < 256; y += 14) {
       ctx.beginPath();
@@ -564,29 +564,15 @@ export class TextureFactory {
 
     ctx.clearRect(0, 0, 512, 256);
 
-    // Color thresholds: Blue (> 50%) -> Orange (21-50%) -> Red (<= 20%)
+    // State thresholds: ok (> 50%) -> warn (21-50%) -> crit (<= 20%), desaturated rig.* tokens
     const ratio = ammo / Math.max(1, maxAmmo);
-    let mainColor = hex(PALETTE.cyan.core);
-    let glowColor = 'rgba(0, 240, 255, 0.25)';
-    let scanlineFill = 'rgba(0, 240, 255, 0.08)';
-    let frameColor = 'rgba(0, 240, 255, 0.65)';
-    let subTextColor = hex(PALETTE.cyan.dim);
-
-    if (ratio <= 0.2) {
-      // Critical Red (0 to 2 shots)
-      mainColor = hex(PALETTE.red.core);
-      glowColor = 'rgba(255, 34, 34, 0.25)';
-      scanlineFill = 'rgba(255, 34, 34, 0.12)';
-      frameColor = 'rgba(255, 34, 34, 0.75)';
-      subTextColor = hex(PALETTE.red.dim);
-    } else if (ratio <= 0.5) {
-      // Warning Orange / Amber (3 to 5 shots)
-      mainColor = hex(PALETTE.amber.core);
-      glowColor = 'rgba(255, 153, 0, 0.25)';
-      scanlineFill = 'rgba(255, 153, 0, 0.10)';
-      frameColor = 'rgba(255, 153, 0, 0.75)';
-      subTextColor = hex(PALETTE.amber.dim);
-    }
+    const state = ratio <= 0.2 ? PALETTE.rig.crit : ratio <= 0.5 ? PALETTE.rig.warn : PALETTE.rig.ok;
+    const alarm = state !== PALETTE.rig.ok;
+    const mainColor = hex(state);
+    const glowColor = rgba(state, 0.25);
+    const scanlineFill = rgba(state, alarm ? 0.11 : 0.08);
+    const frameColor = rgba(state, alarm ? 0.75 : 0.65);
+    const subTextColor = rgba(state, 0.7);
 
     // Outer subtle boundary frame
     ctx.strokeStyle = frameColor;

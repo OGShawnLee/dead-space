@@ -3,7 +3,8 @@
  * via `applyCssPalette`, the DOM/menus). No hex literals outside this file.
  *
  * Saturation rule:
- *  - `core`  saturated; only small emissives and Isaac's own tech (RIG, visor, stasis, laser).
+ *  - `core`  saturated; only small emissives and strong signals (alarms).
+ *  - `rig`   desaturated state lights for Isaac's tech (RIG spine, visor, stasis, cutter).
  *  - `mid`   world surfaces and objects (pickups, escape room, beacons).
  *  - `dim`   matches the desaturated holographic menus.
  *
@@ -13,27 +14,66 @@
 
 const signal = (core: number, mid: number, dim: number) => ({ core, mid, dim });
 
+/** Muted teal-gray industrial metal ramp (hue ~190, low saturation), darkest to lightest. */
+const metal = {
+  void: 0x050809, // fog, deep shadow
+  m900: 0x0d1417,
+  m800: 0x162126,
+  m700: 0x23323a,
+  steel: 0x2b4048, // teal-gray cargo steel
+  m500: 0x3d5259,
+  m300: 0x70898f
+};
+
 export const PALETTE = {
-  /** Muted teal-gray industrial metal ramp (hue ~190, low saturation), darkest to lightest. */
-  metal: {
-    void: 0x050809, // fog, deep shadow
-    m900: 0x0d1417,
-    m800: 0x162126,
-    m700: 0x23323a,
-    steel: 0x2b4048, // teal-gray cargo steel
-    m500: 0x3d5259,
-    m300: 0x70898f
-  },
+  metal,
   /** Scene ambient tint. */
   ambient: 0x08131a,
   /** Warmer atmosphere for industrial areas (engineering). */
   ambientWarm: 0x10140f,
   fogWarm: 0x080b09,
-  /** Worn bronze / rust / grease (Isaac's suit, grime). */
+  /** Worn rust / grease (legacy suit texture, grime). */
   rust: {
-    bronze: 0x8a6a43,
     rust: 0x5c4528,
     grease: 0x2d2214
+  },
+  /**
+   * Isaac's Level 1 RIG suit: olive fabric, black panels, aged copper.
+   * Refined against the reference turnaround (lit samples, lifted toward albedo).
+   */
+  suit: {
+    fabric: 0x50554b, // olive-gray jacket
+    fabricDark: 0x2d302c, // charcoal trousers
+    panel: 0x181b1b, // black shoulder caps, side panels, gloves
+    strap: 0x2b2925, // belts, leather
+    copper: 0x8e6a4c, // base copper (helmet, bracers, boots)
+    copperDark: 0x4f3a2a, // recesses, boot shadow side
+    copperHi: 0xb48e6c, // worn edges
+    patina: 0x55746a, // teal oxidation in crevices
+    brass: 0xa88d5c // buckles, clips
+  },
+  /**
+   * Desaturated state lights for Isaac's tech (owner decision, Proposal 005 11.1):
+   * RIG spine, visor, stasis gauge, cutter hologram, lasers, stasis shot.
+   * State order: ok > warn > crit > off.
+   */
+  rig: {
+    ok: 0x8fd4dc, // nominal / full: pale cyan
+    warn: 0xd9a461, // mid state: muted orange
+    crit: 0xc9615a, // critical: muted red
+    off: metal.m900, // drained segment
+    glow: 0xa9dde3 // light color and additive glow (lighter than `ok`)
+  },
+  /** Plasma Cutter, sampled from the reference and kept muted. */
+  weapon: {
+    paint: 0xb8a352, // worn safety-yellow frames
+    paintWorn: 0x8d9296, // bare steel where paint chipped
+    gunmetal: 0x2a2f33, // main body
+    steelDark: 0x4a5054, // secondary plates
+    dial: 0xa4adb0, // knurled silver dial
+    grip: 0x56403a, // textured brown-red grip
+    cable: 0x111517,
+    wear: 0x8a3a2c // red scratches / dried blood on the paint
   },
   cyan: signal(0x00f0ff, 0x4fa3ad, 0x9fc9d0),
   amber: signal(0xff9900, 0xb08a50, 0xd6b889),
@@ -71,6 +111,10 @@ export const PALETTE = {
 } as const;
 
 export const hex = (n: number): string => '#' + n.toString(16).padStart(6, '0');
+
+/** CSS `rgba()` from a palette token, for canvas glows and translucent fills. */
+export const rgba = (n: number, alpha: number): string =>
+  `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 
 /** Exposes the palette to CSS as `--c-<family>-<token>` custom properties. */
 export function applyCssPalette(root: HTMLElement = document.documentElement): void {

@@ -17,7 +17,7 @@ export class BloodParticleSystem {
   pGeo = new BoxGeometry(0.06, 0.06, 0.06);
   pMat = new MeshBasicMaterial({ color: PALETTE.flesh.blood });
   stasisGeo = new BoxGeometry(0.04, 0.04, 0.04);
-  stasisMat = new MeshBasicMaterial({ color: PALETTE.cyan.core });
+  stasisMat = new MeshBasicMaterial({ color: PALETTE.rig.glow });
 
   constructor(public scene: Scene) {}
 

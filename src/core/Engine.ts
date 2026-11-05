@@ -310,20 +310,20 @@ export class DeadSpaceGame {
       raycaster.setFromCamera(new Vector2(0, 0), this.camera);
       const targetDir = raycaster.ray.direction.clone().normalize();
 
-      // Glowing Cyan Stasis Orb
+      // Stasis orb (desaturated rig.* tech colors)
       const orbGroup = new Group();
       orbGroup.position.copy(armWorldPos);
 
       const coreMesh = new Mesh(
         new SphereGeometry(0.18, 12, 12),
-        new MeshBasicMaterial({ color: PALETTE.cyan.core })
+        new MeshBasicMaterial({ color: PALETTE.rig.glow })
       );
       orbGroup.add(coreMesh);
 
       const haloMesh = new Mesh(
         new SphereGeometry(0.32, 8, 8),
         new MeshBasicMaterial({
-          color: PALETTE.cyan.mid,
+          color: PALETTE.rig.ok,
           wireframe: true,
           transparent: true,
           opacity: 0.6
@@ -331,7 +331,7 @@ export class DeadSpaceGame {
       );
       orbGroup.add(haloMesh);
 
-      const orbLight = new PointLight(PALETTE.cyan.core, 2.5, 5.0);
+      const orbLight = new PointLight(PALETTE.rig.glow, 2.5, 5.0);
       orbGroup.add(orbLight);
 
       this.scene.add(orbGroup);
@@ -426,7 +426,7 @@ export class DeadSpaceGame {
   createPlasmaBeamTracer(start: Vector3, end: Vector3): void {
     const geom = new BufferGeometry().setFromPoints([start, end]);
     const mat = new LineBasicMaterial({
-      color: PALETTE.cyan.core,
+      color: PALETTE.rig.ok,
       linewidth: 3,
       transparent: true,
       opacity: 0.95
@@ -434,7 +434,7 @@ export class DeadSpaceGame {
     const line = new Line(geom, mat);
     this.scene.add(line);
 
-    const muzzleLight = new PointLight(PALETTE.cyan.core, 4.0, 5.0);
+    const muzzleLight = new PointLight(PALETTE.rig.glow, 4.0, 5.0);
     muzzleLight.position.copy(start);
     this.scene.add(muzzleLight);
 

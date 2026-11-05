@@ -37,6 +37,7 @@ The player is Isaac Clarke on the USG Ishimura: a procedurally generated grid la
   ./node_modules/.bin/tsc --noEmit -p .                                   # typecheck (TS 7, strict:false)
   ./node_modules/.bin/vite build --outDir "$TEMP/ds-build" --emptyOutDir  # production build, then rm -rf it
   bun run check:palette                                                   # fails on color literals outside Palette.ts
+  bun scripts/isaac-check.ts                                              # Isaac contract, poses, tech colors, fade, framing (stub DOM)
   bun run dev                                                             # dev server (vite, port 3000)
   ```
 
@@ -76,7 +77,12 @@ dead-space/
     │   └── SoundSystem.ts      # all audio (Web Audio): combat, enemies, UI blips, master volume, ambient drone
     ├── camera/ThirdPersonCamera.ts   # over-the-shoulder camera, pointer lock, aim zoom, collision, inventory shot
     ├── entities/
-    │   ├── Player.ts           # Isaac model (boxes), RIG spine, stasis dial, plasma cutter + ammo hologram, flashlight, damage/heal/reload
+    │   ├── Player.ts           # Isaac gameplay: hp/ammo/stasis/inventory, movement + collisions, tech colors (RIG, stasis, ammo); visuals via an IsaacView
+    │   ├── isaac/              # Proposal 005: Isaac's visuals and animation
+    │   │   ├── IsaacView.ts    # IsaacView contract + IsaacAnimState (intent from Player) + ?isaac=legacy query
+    │   │   ├── IsaacTech.ts    # shared tech parts: ammo hologram, aim laser, stasis gauge, RIG light, flashlight, proximity fade
+    │   │   ├── IsaacModel.ts   # new model (default). Phase 1: provisional capsule mannequin on a joint hierarchy; WEAPON_SIDE
+    │   │   └── LegacyIsaac.ts  # old box model behind ?isaac=legacy (A/B until the owner approves, then deleted)
     │   ├── anatomy.ts          # organic geometry builders (limb, torso, head, scythe, tail, spikes, claws, idleBreath); no gameplay
     │   ├── Necromorph.ts       # Slasher: limb hierarchy, patrol/chase, dismemberment
     │   ├── Exploder.ts         # Exploder: volatile sac, explosion AoE
@@ -158,14 +164,14 @@ DOM + CSS 3D. A stack of panels; the active one faces the player and previous on
 `PickupItem { group, itemId, picked, rotSpeed }`. `checkPickupsAndEscape()` picks up automatically within 1.4 m **only if the whole `pickupAmount` fits**; otherwise shows "Inventario lleno: ...". Toast via `showPrompt()`.
 
 ### Zero-HUD
-The 2D HUD was removed. On screen only: the **crosshair** (kept as the aim source of truth: the weapon model is primitive and its light does not track the aim), the **pickup/status toast** (`#pickup-toast`, bottom-left, Geist Pixel Line), the damage flash and the CRT/vignette overlays. Health = RIG spine on Isaac's back (6 vertebrae: cyan > amber > red), stasis = shoulder dial, ammo = hologram on the cutter (its plane has `depthTest:false` so the arm cannot clip it).
+The 2D HUD was removed. On screen only: the **crosshair** (kept as the aim source of truth: the weapon model is primitive and its light does not track the aim), the **pickup/status toast** (`#pickup-toast`, bottom-left, Geist Pixel Line), the damage flash and the CRT/vignette overlays. Health = RIG spine on Isaac's back (6 vertebrae: `rig.ok` > `rig.warn` > `rig.crit`), stasis = shoulder dial, ammo = hologram on the cutter (its plane has `depthTest:false` so the arm cannot clip it).
 
 ### Color: single source of truth (`graphics/Palette.ts`)
-**Rule: no color literals (`0xRRGGBB`, `#hex`) anywhere except `src/graphics/Palette.ts`.** Use `PALETTE.<family>.<token>` in TS, and `var(--c-<family>-<token>)` in CSS (`applyCssPalette()` in `game.ts` writes them to `:root` at boot). `bun run check:palette` (`scripts/check-palette.mjs`) fails if a literal appears elsewhere (`rgba(...)` is not checked). Need a new color? Add a token, do not inline it.
+**Rule: no color literals (`0xRRGGBB`, `#hex`) anywhere except `src/graphics/Palette.ts`.** Use `PALETTE.<family>.<token>` in TS, and `var(--c-<family>-<token>)` in CSS (`applyCssPalette()` in `game.ts` writes them to `:root` at boot). `bun run check:palette` (`scripts/check-palette.mjs`) fails if a literal appears elsewhere (`rgba(...)` is not checked; for translucent canvas colors use the `rgba(token, alpha)` helper from `Palette.ts`). Need a new color? Add a token, do not inline it.
 
-Families: `metal` (void, m900…m300 ramp), `ambient`, `rust` (bronze, rust, grease), `cyan` / `amber` / `red` / `green` (each `core | mid | dim`), `flesh` (skin, bone, blood, viscera, leather), `fire` (flame, blast), `ui` (menu ink: white, bright, ink, soft, dim, dark, text, hint), `light` (corridor, flashlight).
+Families: `metal` (void, m900…m300 ramp), `ambient`, `rust` (rust, grease), `suit` (Isaac: fabric, fabricDark, panel, strap, copper, copperDark, copperHi, patina, brass), `rig` (Isaac's tech state lights: ok, warn, crit, off, glow), `weapon` (Plasma Cutter: paint, paintWorn, gunmetal, steelDark, dial, grip, cable, wear), `cyan` / `amber` / `red` / `green` (each `core | mid | dim`), `flesh` (skin, bone, blood, viscera, leather), `fire` (flame, blast), `ui` (menu ink: white, bright, ink, soft, dim, dark, text, hint), `light` (corridor, flashlight).
 
-**Saturation rule (owner feedback: the world was too saturated and clashed with the desaturated menus):** `core` = saturated, only for small emissives and strong signals (alarms); Isaac's own tech (RIG, visor, stasis, laser, ammo hologram) **still uses `core` today but is planned to move to the desaturated `rig.*` tokens** (owner decision, Proposal 005, phase 1); `mid` = world surfaces and objects (pickups, escape room, beacon, hazard stripes); `dim` = matches the holographic menus. Tune `mid` values in `Palette.ts` if something looks too dull or too loud.
+**Saturation rule (owner feedback: the world was too saturated and clashed with the desaturated menus):** `core` = saturated, only for small emissives and strong signals (alarms); Isaac's own tech (RIG, visor, stasis gauge + projectile + sparks, laser, plasma beam, ammo hologram) uses the **desaturated `rig.*` tokens** (owner decision, Proposal 005; point lights use `rig.glow` in the nominal state); `mid` = world surfaces and objects (pickups, escape room, beacon, hazard stripes); `dim` = matches the holographic menus. Tune `mid` values in `Palette.ts` if something looks too dull or too loud.
 
 ### Look (current)
 Practical lights carry the color (red `red.core` always flickering, cold white `light.corridor`); heavy darkness (fog `metal.void` @0.08). Walls/floor/ceiling are `MeshStandardMaterial` with a single canvas color map (grays unified into the `metal` ramp), `metalness` 0.65–0.9 and **no environment map**, which renders them nearly black/flat (relief maps now derive from the color maps; see Proposal 004). Enemies and Isaac are boxes/cones/cylinders. Renderer has no tone mapping and no post-processing; scanlines and vignette are CSS overlays (`.crt-overlay`, `.vignette-overlay`).
@@ -236,7 +242,7 @@ Reference images live in `proposals/references/` and are **git-ignored** (third-
 | 002 | `002-WORLD-EXPANSION-AND-GAME-ROADMAP.md` | Proposed: environmental hazards (steam, vacuum + oxygen), power rerouting, Marker dementia, Kinesis/Stomp, multi-sector tram progression. |
 | 003 | `003-HOLOGRAPHIC-INVENTORY-AND-ZERO-HUD.md` | Accepted. Phases 1–4 implemented and committed; 5 (Mission + Logs tabs, `SectorDef`) and 6 (persistence/polish) pending. Section 7 lists the owner's decisions. |
 | 004 | `004-VISUAL-OVERHAUL.md` | Accepted (rewritten): data-driven themes. Theme infra and unified palette implemented; props, enemy builder, relief maps and a second theme pending (see 9.2). |
-| 005 | `005-ISAAC-REMODEL.md` | Proposed (hand-off for Claude Opus): detailed procedural Isaac (Level 1 RIG suit, copper gear, skinned fabric body, procedural animation with IK), new Plasma Cutter model, desaturated `rig.*` HUD lights; reference images in `proposals/references/`. Not started. |
+| 005 | `005-ISAAC-REMODEL.md` | Proposed (hand-off for Claude Opus): detailed procedural Isaac (Level 1 RIG suit, copper gear, skinned fabric body, procedural animation with IK), new Plasma Cutter model, desaturated `rig.*` HUD lights; reference images in `proposals/references/`. **Phase 1 done and approved (2026-11-04)** (scaffold + contract + palette; new default is a provisional mannequin, old model at `?isaac=legacy`). Note: the follow camera sits over Isaac's anatomical **left** shoulder (+X) and the weapon is on that side; **Owner decision (2026-11-04): keep the camera where it is** (left shoulder); `IsaacModel.WEAPON_SIDE` stays `1`. Crosshair uses `rig.ok`. |
 
 Decisions already taken in 003 (still valid): stasis recharged from the inventory; damage does not close the inventory; 5x3 grid; `Tab` opens it; no quick-use keys for consumables; pickups are automatic while there is room; crosshair stays as the HTML reticle.
 

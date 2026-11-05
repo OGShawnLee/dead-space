@@ -132,16 +132,16 @@ html, body {
 .plasma-dot {
   width: 5px;
   height: 5px;
-  background-color: var(--c-cyan-core);
+  background-color: var(--c-rig-ok);
   border-radius: 50%;
-  box-shadow: 0 0 8px 2px var(--c-cyan-core);
+  box-shadow: 0 0 8px 2px var(--c-rig-ok);
 }
 
 .plasma-bracket {
   width: 7px;
   height: 18px;
-  border: 2px solid var(--c-cyan-core);
-  box-shadow: 0 0 6px var(--c-cyan-core);
+  border: 2px solid var(--c-rig-ok);
+  box-shadow: 0 0 6px var(--c-rig-ok);
 }
 
 .plasma-bracket.left {
