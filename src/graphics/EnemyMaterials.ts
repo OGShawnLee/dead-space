@@ -21,5 +21,5 @@ export function skinMaterial(variant: SkinVariant): MeshStandardMaterial {
 
 /** Bone / chitin for blades, claws and fangs. */
 export function boneMaterial(color: number = PALETTE.flesh.skin): MeshStandardMaterial {
-  return new MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 });
+  return new MeshStandardMaterial({ color, roughness: 0.55, metalness: 0.15 });
 }

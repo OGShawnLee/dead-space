@@ -67,12 +67,12 @@ export const THEMES = {
       ambientIntensity: 0.18
     },
     surfaces: {
-      wall: { texture: 'metalWall', relief: 2, roughness: 0.3, metalness: 0.9 },
+      wall: { texture: 'metalWall', relief: 2, roughness: 0.75, metalness: 0.3 },
       floors: [
-        { share: 0.7, surface: { texture: 'floorPlate', relief: 1.2, roughness: 0.45, metalness: 0.7 } },
-        { share: 0.3, surface: { texture: 'floorGrate', relief: 1.5, roughness: 0.4, metalness: 0.8 } }
+        { share: 0.7, surface: { texture: 'floorPlate', relief: 1.2, roughness: 0.7, metalness: 0.35 } },
+        { share: 0.3, surface: { texture: 'floorGrate', relief: 1.5, roughness: 0.6, metalness: 0.45 } }
       ],
-      ceiling: { texture: 'ceiling', relief: 2, roughness: 0.5, metalness: 0.65 }
+      ceiling: { texture: 'ceiling', relief: 2, roughness: 0.8, metalness: 0.25 }
     },
     lights: {
       density: 0.14,
@@ -82,10 +82,52 @@ export const THEMES = {
         { share: 0.65, kind: { color: PALETTE.light.corridor, intensity: 1.0, distance: 7.5, flicker: 0.5 } }
       ]
     }
+  },
+  /**
+   * Engineering deck: warmer and denser darkness, catwalk grating, amber service lamps,
+   * heavy pipework. Added with data only; no code branches in ShipLevel or Engine.
+   */
+  'engineering': {
+    id: 'engineering',
+    props: [
+      { id: 'pipe', density: 0.75 },
+      { id: 'trim', density: 0.9 },
+      { id: 'vent', density: 0.2 },
+      { id: 'conduit', density: 0.6 },
+      { id: 'crate', density: 0.03 }
+    ],
+    atmosphere: {
+      fogColor: PALETTE.fogWarm,
+      fogDensity: 0.1,
+      ambientColor: PALETTE.ambientWarm,
+      ambientIntensity: 0.2
+    },
+    surfaces: {
+      wall: { texture: 'metalWall', relief: 2.5, roughness: 0.8, metalness: 0.3 },
+      floors: [
+        { share: 0.35, surface: { texture: 'floorPlate', relief: 1.2, roughness: 0.75, metalness: 0.35 } },
+        { share: 0.65, surface: { texture: 'floorGrate', relief: 1.8, roughness: 0.55, metalness: 0.5 } }
+      ],
+      ceiling: { texture: 'ceiling', relief: 2.5, roughness: 0.85, metalness: 0.25 }
+    },
+    lights: {
+      density: 0.16,
+      kinds: [
+        { share: 0.5, kind: { color: PALETTE.amber.core, intensity: 1.1, distance: 8, flicker: 0.3 } },
+        { share: 0.2, kind: { color: PALETTE.red.core, intensity: 1.4, distance: 7.5, flicker: 1 } },
+        { share: 0.3, kind: { color: PALETTE.light.corridor, intensity: 0.8, distance: 7, flicker: 0.6 } }
+      ]
+    }
   }
 } satisfies Record<string, AreaTheme>;
 
 export type ThemeId = keyof typeof THEMES;
+
+/** `?theme=engineering` picks a theme for testing; unknown or missing falls back to the default. */
+export function themeFromQuery(search: string = typeof location !== 'undefined' ? location.search : ''): ThemeId {
+  const id = new URLSearchParams(search).get('theme');
+  return id && id in THEMES ? (id as ThemeId) : 'ishimura-default';
+}
 
 export function getTheme(id: ThemeId): AreaTheme {
   return THEMES[id];

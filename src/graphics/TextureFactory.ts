@@ -87,7 +87,7 @@ export class TextureFactory {
         nImg.data[i + 3] = 255;
 
         // Darker = grimier = rougher, plus fine noise; scales the material roughness.
-        const rough = Math.min(1, Math.max(0.35, 1 - lum[y * w + x] * 0.9 + (Math.random() - 0.5) * 0.12));
+        const rough = Math.min(1, Math.max(0.6, 1 - lum[y * w + x] * 0.9 + (Math.random() - 0.5) * 0.12));
         const g = rough * 255;
         rImg.data[i] = g;
         rImg.data[i + 1] = g;

@@ -80,7 +80,7 @@ export class ShipLevel {
       color: PALETTE.green.mid,
       emissive: PALETTE.green.mid,
       emissiveIntensity: 0.6,
-      roughness: 0.2
+      roughness: 0.55
     });
   }
 
@@ -293,7 +293,7 @@ export class ShipLevel {
         color: PALETTE.cyan.mid,
         emissive: PALETTE.cyan.mid,
         emissiveIntensity: 0.5,
-        roughness: 0.3
+        roughness: 0.55
       });
       const mesh = new Mesh(geo, mat);
       group.add(mesh);
@@ -306,8 +306,8 @@ export class ShipLevel {
         color: PALETTE.cyan.mid,
         emissive: PALETTE.cyan.mid,
         emissiveIntensity: 0.8,
-        roughness: 0.2,
-        metalness: 0.5
+        roughness: 0.5,
+        metalness: 0.3
       });
       const mesh = new Mesh(geo, mat);
       group.add(mesh);
@@ -326,7 +326,7 @@ export class ShipLevel {
         color: PALETTE.green.mid,
         emissive: PALETTE.green.mid,
         emissiveIntensity: 0.5,
-        roughness: 0.3
+        roughness: 0.55
       });
       const mesh = new Mesh(geo, mat);
       group.add(mesh);

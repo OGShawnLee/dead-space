@@ -55,7 +55,7 @@ function crateGeometry(): BufferGeometry {
   return merged!;
 }
 
-const metal = (color: number, roughness = 0.55, metalness = 0.35) =>
+const metal = (color: number, roughness = 0.75, metalness = 0.2) =>
   () => new MeshStandardMaterial({ color, roughness, metalness });
 
 export const PROPS = {
@@ -103,7 +103,7 @@ export const PROPS = {
     geometry: crateGeometry,
     material: () => {
       const { map, normalMap, roughnessMap } = TextureFactory.surfaceMaps('crateSteel', 3);
-      return new MeshStandardMaterial({ map, normalMap, roughnessMap, roughness: 0.7, metalness: 0.45 });
+      return new MeshStandardMaterial({ map, normalMap, roughnessMap, roughness: 0.8, metalness: 0.3 });
     },
     collider: true,
     tintVariance: 0.3

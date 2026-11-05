@@ -22,7 +22,7 @@ import {
 import { SoundSystem } from './SoundSystem';
 import { InputManager } from './InputManager';
 import { ShipLevel } from '../world/ShipLevel';
-import type { AreaTheme } from '../world/AreaTheme';
+import { themeFromQuery, type AreaTheme } from '../world/AreaTheme';
 import { BloodParticleSystem } from '../graphics/BloodParticleSystem';
 import { Player } from '../entities/Player';
 import { Necromorph } from '../entities/Necromorph';
@@ -111,7 +111,7 @@ export class DeadSpaceGame {
   constructor() {
     this.initThree();
     this.sound = new SoundSystem();
-    this.level = new ShipLevel(this.scene);
+    this.level = new ShipLevel(this.scene, themeFromQuery());
     this.applyAtmosphere(this.level.theme);
     this.bloodSys = new BloodParticleSystem(this.scene);
 

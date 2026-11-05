@@ -14,36 +14,39 @@
 const signal = (core: number, mid: number, dim: number) => ({ core, mid, dim });
 
 export const PALETTE = {
-  /** Cold industrial metal ramp, darkest to lightest. */
+  /** Muted teal-gray industrial metal ramp (hue ~190, low saturation), darkest to lightest. */
   metal: {
-    void: 0x050608, // legacy: fog, deep shadow
-    m900: 0x0e1014,
-    m800: 0x16181c,
-    m700: 0x22262c,
-    steel: 0x2c3846, // blue-gray cargo steel
-    m500: 0x3d4450,
-    m300: 0x6b7280
+    void: 0x050809, // fog, deep shadow
+    m900: 0x0d1417,
+    m800: 0x162126,
+    m700: 0x23323a,
+    steel: 0x2b4048, // teal-gray cargo steel
+    m500: 0x3d5259,
+    m300: 0x70898f
   },
   /** Scene ambient tint. */
-  ambient: 0x080b12, // legacy
+  ambient: 0x08131a,
+  /** Warmer atmosphere for industrial areas (engineering). */
+  ambientWarm: 0x10140f,
+  fogWarm: 0x080b09,
   /** Worn bronze / rust / grease (Isaac's suit, grime). */
   rust: {
     bronze: 0x8a6a43,
     rust: 0x5c4528,
     grease: 0x2d2214
   },
-  cyan: signal(0x00f0ff, 0x2fa3b3, 0x86bcc7),
-  amber: signal(0xff9900, 0xc98a2e, 0xe0b070),
-  red: signal(0xff2222, 0xb8403a, 0xff9a8f),
-  green: signal(0x00ff66, 0x3aa86a, 0x8ff0b5),
+  cyan: signal(0x00f0ff, 0x4fa3ad, 0x9fc9d0),
+  amber: signal(0xff9900, 0xb08a50, 0xd6b889),
+  red: signal(0xff2222, 0xa8534c, 0xff9a8f),
+  green: signal(0x00ff66, 0x4f9a78, 0x8ff0b5),
   flesh: {
-    skin: 0xd8c8b8,
-    bone: 0x83776e,
+    skin: 0xb4bcb6, // bone / chitin, pale teal-gray
+    bone: 0x6f7d7c,
     blood: 0x990000,
     viscera: 0x770000,
-    leather: 0x2d3748, // Leaper hide / dark chitin
-    sallow: 0x6f7a6c, // Leaper skin (greenish gray)
-    pallid: 0x80858a // Exploder skin (pale blue-gray)
+    leather: 0x25343a, // Leaper hide / dark chitin
+    sallow: 0x657a76, // Leaper skin (greenish teal-gray)
+    pallid: 0x7a8a90 // Exploder skin (pale blue-gray)
   },
   /** Explosions and fire (legacy values). */
   fire: {
@@ -62,8 +65,8 @@ export const PALETTE = {
     hint: 0xffb18a
   },
   light: {
-    corridor: 0xd8e8ff, // legacy: cold practical light
-    flashlight: 0xd4e9ff // legacy
+    corridor: 0xcfe6e8, // cold teal-white practical light
+    flashlight: 0xcfe8ee
   }
 } as const;
 

@@ -36,7 +36,7 @@ Suggested themes for the 12 chapters: Medical, Engineering, Hydroponics, Mining,
 3. **Materials with relief** — *done* (`TextureFactory.surfaceMaps()`, `SurfaceDef.relief`; walls, floor, ceiling and crates). rustic metals, brighter albedo / lower metalness (or a very subtle envMap without tone mapping), derived normal + roughness maps (Sobel on luminance) cached per surface; more saturated practical lights. Done by editing the theme + TextureFactory params, first for a Medical theme.
 4. **Props as a registry** — *first version done* (`src/world/props/`: pipe, trim, vent, conduit, crate; seeded, instanced; more props/decals pending). `PROPS: Record<PropId, PropDef>` (geometry, material, placement rule: wall / ceiling / corner / floor). Seeded placement driven by the theme; one `InstancedMesh` per prop type. Pipes, conduits, vents, crates, trim.
 5. **Enemy builder** — *first version done* (`entities/anatomy.ts`, `graphics/EnemyMaterials.ts`; Slasher, Exploder, Leaper remodeled keeping limb tagging, hierarchy and AI). keep the `LimbMesh` hierarchy and hitboxes untouched (gameplay). Appearance moves to a per-morphology builder (capsule/lathe/tube, vertex noise, wet skin, stump caps, procedural idle) with scale/tint variants. New enemy = new morphology, not duplicated logic.
-6. **Second theme** (e.g. Engineering) added with data only: the scalability proof. Then Isaac's suit.
+6. **Second theme** — *done*: `engineering` in `AreaTheme.ts`, data only (selectable with `?theme=engineering`). The scalability proof. Then Isaac's suit.
 
 ### TODO: environment details from owner reference screenshots (2026-11-04)
 Pending props/decals/effects, to add as `PROPS` entries / theme data (no per-area code):
@@ -48,7 +48,7 @@ Pending props/decals/effects, to add as `PROPS` entries / theme data (no per-are
 - Clutter and storytelling: overturned wheelchairs, debris, bodies, scattered equipment.
 - Grated floor with worn/wet patches (roughness variation) and dark stains.
 - **Enemy variants:** stronger blue-black necromorphs (darker skin, bluish tint) as tougher variants of the same morphologies; implement as skin/tint data on the enemy builder, not new classes.
-- **Teal/cyan-gray world and enemy palette:** the owner wants the world and the enemies in a muted, grayish cyan/teal, aligned with the holographic menus. Retint `metal`, `flesh` and light tokens in `Palette.ts` (and enemy skin variants) toward that; do it through tokens only.
+- ~~Teal/cyan-gray world and enemy palette~~ — **done** (2026-11-04): `metal`, `flesh`, `ambient` and `light` tokens retinted to a muted teal-gray; surfaces made matte (metalness 0.25–0.5, roughness 0.55–0.85). Tune in `Palette.ts` / `AreaTheme.ts`.
 
 ## 5. Performance guardrails (needed for bigger areas)
 
