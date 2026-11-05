@@ -228,12 +228,15 @@ Open requires `missionStarted`, not paused, not dead/won, no menu open. It sets 
 
 ## 10. Proposals (design docs in `proposals/`)
 
+Reference images live in `proposals/references/` and are **git-ignored** (third-party artwork, local only). Do not commit them.
+
 | # | File | Status |
 | :--- | :--- | :--- |
 | 001 | `001-FLASHLIGHT-MECHANICS.md` | Proposed, **not implemented**: EM interference radar, stealth vs aggro, battery with shoulder LED, high-beam stun, volumetric cone + dust, UV clues. Priority now increased because the visual direction relies on darkness. |
 | 002 | `002-WORLD-EXPANSION-AND-GAME-ROADMAP.md` | Proposed: environmental hazards (steam, vacuum + oxygen), power rerouting, Marker dementia, Kinesis/Stomp, multi-sector tram progression. |
 | 003 | `003-HOLOGRAPHIC-INVENTORY-AND-ZERO-HUD.md` | Accepted. Phases 1–4 implemented and committed; 5 (Mission + Logs tabs, `SectorDef`) and 6 (persistence/polish) pending. Section 7 lists the owner's decisions. |
 | 004 | `004-VISUAL-OVERHAUL.md` | Accepted (rewritten): data-driven themes. Theme infra and unified palette implemented; props, enemy builder, relief maps and a second theme pending (see 9.2). |
+| 005 | `005-ISAAC-REMODEL.md` | Proposed (hand-off for Claude Opus): detailed procedural Isaac (Level 1 RIG suit, copper gear, skinned fabric body, procedural animation with IK), new Plasma Cutter model, desaturated `rig.*` HUD lights; reference images in `proposals/references/`. Not started. |
 
 Decisions already taken in 003 (still valid): stasis recharged from the inventory; damage does not close the inventory; 5x3 grid; `Tab` opens it; no quick-use keys for consumables; pickups are automatic while there is room; crosshair stays as the HTML reticle.
 
@@ -247,7 +250,7 @@ Decisions already taken in 003 (still valid): stasis recharged from the inventor
 
 ---
 
-## 12. Suggested next steps (ask the owner which)
+**Priority (owner, 2026-11-04): Isaac remodel, see Proposal 005.**
 
 1. **Visual overhaul, next steps** (Proposal 004): props registry with `InstancedMesh` (pipes, conduits, crates, trim), then relief maps for materials, enemy builder, second theme. No post-processing; colors only via `Palette.ts`.
 2. **Flashlight mechanics** (Proposal 001), phases 1–4, since the look depends on it.
