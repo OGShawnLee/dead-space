@@ -37,7 +37,8 @@ The player is Isaac Clarke on the USG Ishimura: a procedurally generated grid la
   ./node_modules/.bin/tsc --noEmit -p .                                   # typecheck (TS 7, strict:false)
   ./node_modules/.bin/vite build --outDir "$TEMP/ds-build" --emptyOutDir  # production build, then rm -rf it
   bun run check:palette                                                   # fails on color literals outside Palette.ts
-  bun scripts/isaac-check.ts                                              # Isaac contract, poses, tech colors, fade, framing (stub DOM)
+  bun scripts/isaac-check.ts                                              # Isaac contract, skeleton, weights, proportions, poses, tech colors, fade, framing (stub DOM)
+  bun scripts/isaac-render.ts "$TEMP/isaac.png" idle                      # offline render of Isaac (front/side/back, 10 cm grid); poses: idle|aim|walk|bind. Read the PNG to SEE the model
   bun run dev                                                             # dev server (vite, port 3000)
   ```
 
@@ -79,9 +80,13 @@ dead-space/
     ├── entities/
     │   ├── Player.ts           # Isaac gameplay: hp/ammo/stasis/inventory, movement + collisions, tech colors (RIG, stasis, ammo); visuals via an IsaacView
     │   ├── isaac/              # Proposal 005: Isaac's visuals and animation
-    │   │   ├── IsaacView.ts    # IsaacView contract + IsaacAnimState (intent from Player) + ?isaac=legacy query
+    │   │   ├── IsaacView.ts    # IsaacView contract + IsaacAnimState (intent from Player) + ?isaac=legacy|debug query
+    │   │   ├── IsaacSkeleton.ts # 21 bones as data (model-space bind positions, identity rest rotations, L = +X), joint limits
+    │   │   ├── IsaacBody.ts    # skinned fabric body: superellipse lofts (PCHIP between sections, domed ends), cosine joint weights, vertex-color panels
+    │   │   ├── IsaacAnimator.ts # procedural animation (provisional: distance-driven swing, lean, low-ready/aim/stasis); phase 6 replaces legs with IK
+    │   │   ├── IsaacDebug.ts   # ?isaac=debug: SkeletonHelper, turntable; keys K skeleton, O turntable, P bind pose, J wireframe
     │   │   ├── IsaacTech.ts    # shared tech parts: ammo hologram, aim laser, stasis gauge, RIG light, flashlight, proximity fade
-    │   │   ├── IsaacModel.ts   # new model (default). Phase 1: provisional capsule mannequin on a joint hierarchy; WEAPON_SIDE
+    │   │   ├── IsaacModel.ts   # facade (default model): skeleton + body + provisional gear on bones + tech + weapon; WEAPON_SIDE = 'L'
     │   │   └── LegacyIsaac.ts  # old box model behind ?isaac=legacy (A/B until the owner approves, then deleted)
     │   ├── anatomy.ts          # organic geometry builders (limb, torso, head, scythe, tail, spikes, claws, idleBreath); no gameplay
     │   ├── Necromorph.ts       # Slasher: limb hierarchy, patrol/chase, dismemberment
@@ -242,7 +247,7 @@ Reference images live in `proposals/references/` and are **git-ignored** (third-
 | 002 | `002-WORLD-EXPANSION-AND-GAME-ROADMAP.md` | Proposed: environmental hazards (steam, vacuum + oxygen), power rerouting, Marker dementia, Kinesis/Stomp, multi-sector tram progression. |
 | 003 | `003-HOLOGRAPHIC-INVENTORY-AND-ZERO-HUD.md` | Accepted. Phases 1–4 implemented and committed; 5 (Mission + Logs tabs, `SectorDef`) and 6 (persistence/polish) pending. Section 7 lists the owner's decisions. |
 | 004 | `004-VISUAL-OVERHAUL.md` | Accepted (rewritten): data-driven themes. Theme infra and unified palette implemented; props, enemy builder, relief maps and a second theme pending (see 9.2). |
-| 005 | `005-ISAAC-REMODEL.md` | Proposed (hand-off for Claude Opus): detailed procedural Isaac (Level 1 RIG suit, copper gear, skinned fabric body, procedural animation with IK), new Plasma Cutter model, desaturated `rig.*` HUD lights; reference images in `proposals/references/`. **Phase 1 done and approved (2026-11-04)** (scaffold + contract + palette; new default is a provisional mannequin, old model at `?isaac=legacy`). Note: the follow camera sits over Isaac's anatomical **left** shoulder (+X) and the weapon is on that side; **Owner decision (2026-11-04): keep the camera where it is** (left shoulder); `IsaacModel.WEAPON_SIDE` stays `1`. Crosshair uses `rig.ok`. |
+| 005 | `005-ISAAC-REMODEL.md` | Proposed (hand-off for Claude Opus): detailed procedural Isaac (Level 1 RIG suit, copper gear, skinned fabric body, procedural animation with IK), new Plasma Cutter model, desaturated `rig.*` HUD lights; reference images in `proposals/references/`. **Phase 1 done and approved (2026-11-04)** (scaffold + contract + palette). **Phase 2 done (2026-11-04)**: 21-bone skeleton with proportions measured on the reference (knee 0.535, hip 0.93, belt 1.04, shoulders 1.455 to leave room for neck + collar, helmet top 1.825; elbow axis 2.5 cm behind and knee axis 2.5 cm in front of the limb center), one-draw-call skinned body (~15k tris) with eased-linear joint blends (max edge stretch 1.35x over walk/sprint/aim/stasis, checked), relaxed stance in `IsaacAnimator.STANCE` (forward head, rolled shoulders, soft knees/elbows, free hand in front of the thigh), `HAND_LENGTH` 0.19 m reserved for the phase 3 gloves; helmet/gloves/boots/belt/caps/weapon are still provisional primitives on bones (phase 3/5). Old model at `?isaac=legacy`, viewer at `?isaac=debug`. Note: the follow camera sits over Isaac's anatomical **left** shoulder (+X) and the weapon is on that side; **Owner decision (2026-11-04): keep the camera where it is** (left shoulder); `IsaacModel.WEAPON_SIDE` stays `1`. Crosshair uses `rig.ok`. |
 
 Decisions already taken in 003 (still valid): stasis recharged from the inventory; damage does not close the inventory; 5x3 grid; `Tab` opens it; no quick-use keys for consumables; pickups are automatic while there is room; crosshair stays as the HTML reticle.
 

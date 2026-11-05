@@ -67,9 +67,10 @@ export class Player {
     this.inventory.add('plasma_energy', 30);
     this.inventory.add('med_small', 2);
 
-    this.model = isaacModeFromQuery() === 'legacy'
+    const mode = isaacModeFromQuery();
+    this.model = mode === 'legacy'
       ? new LegacyIsaac(this.root, this.ammo, this.maxAmmo)
-      : new IsaacModel(this.root, this.ammo, this.maxAmmo);
+      : new IsaacModel(this.root, this.ammo, this.maxAmmo, { scene, debug: mode === 'debug' });
 
     this.updateRigSpine();
     this.updateStasisMeter();

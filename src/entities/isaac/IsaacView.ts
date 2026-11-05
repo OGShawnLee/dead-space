@@ -85,9 +85,13 @@ export interface IsaacView {
   playDeath(): void;
 }
 
-export type IsaacMode = 'new' | 'legacy';
+export type IsaacMode = 'new' | 'legacy' | 'debug';
 
-/** `?isaac=legacy` selects the old box model for A/B comparison. */
+/**
+ * `?isaac=legacy` selects the old box model for A/B comparison; `?isaac=debug` is the
+ * new model with the debug viewer (skeleton overlay, turntable, pose keys).
+ */
 export function isaacModeFromQuery(search: string = typeof location !== 'undefined' ? location.search : ''): IsaacMode {
-  return new URLSearchParams(search).get('isaac') === 'legacy' ? 'legacy' : 'new';
+  const mode = new URLSearchParams(search).get('isaac');
+  return mode === 'legacy' || mode === 'debug' ? mode : 'new';
 }
