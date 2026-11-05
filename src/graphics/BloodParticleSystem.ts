@@ -1,4 +1,5 @@
 import { Mesh, BoxGeometry, MeshBasicMaterial, PointLight, Vector3, type Scene } from 'three';
+import { PALETTE } from './Palette';
 
 interface Particle {
   mesh: Mesh;
@@ -14,9 +15,9 @@ interface Particle {
 export class BloodParticleSystem {
   particles: Particle[] = [];
   pGeo = new BoxGeometry(0.06, 0.06, 0.06);
-  pMat = new MeshBasicMaterial({ color: 0x990000 });
+  pMat = new MeshBasicMaterial({ color: PALETTE.flesh.blood });
   stasisGeo = new BoxGeometry(0.04, 0.04, 0.04);
-  stasisMat = new MeshBasicMaterial({ color: 0x00f0ff });
+  stasisMat = new MeshBasicMaterial({ color: PALETTE.cyan.core });
 
   constructor(public scene: Scene) {}
 
@@ -42,8 +43,8 @@ export class BloodParticleSystem {
 
   spawnExplosionBlast(pos: Vector3, count = 55): void {
     const fireGeo = new BoxGeometry(0.12, 0.12, 0.12);
-    const fireMat = new MeshBasicMaterial({ color: 0xff7700 });
-    const goreMat = new MeshBasicMaterial({ color: 0x770000 });
+    const fireMat = new MeshBasicMaterial({ color: PALETTE.fire.flame });
+    const goreMat = new MeshBasicMaterial({ color: PALETTE.flesh.viscera });
 
     for (let i = 0; i < count; i++) {
       const isFire = Math.random() < 0.5;
@@ -69,7 +70,7 @@ export class BloodParticleSystem {
     }
 
     // Dynamic explosive fireball light
-    const blastLight = new PointLight(0xff6600, 7.0, 10.0);
+    const blastLight = new PointLight(PALETTE.fire.blast, 7.0, 10.0);
     blastLight.position.copy(pos).add(new Vector3(0, 0.6, 0));
     this.scene.add(blastLight);
     setTimeout(() => {

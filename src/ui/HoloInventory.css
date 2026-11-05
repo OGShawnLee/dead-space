@@ -7,8 +7,8 @@
 
 .holo-inventory {
   --font-holo: 'Geist Pixel Line', var(--font-mono);
-  --hi-ink: #e4f1f3;
-  --hi-dim: #9fb9be;
+  --hi-ink: var(--c-ui-ink);
+  --hi-dim: var(--c-ui-dim);
   --hi-edge: rgba(170, 220, 228, 0.55);
   --hi-edge-soft: rgba(170, 220, 228, 0.2);
   --hi-cell: linear-gradient(180deg, rgba(44, 66, 74, 0.8), rgba(24, 38, 44, 0.85));
@@ -123,7 +123,7 @@ body:has(.holo-inventory.is-open) #crosshair {
 }
 
 .hi-tab-icon.is-active {
-  color: #fff;
+  color: var(--c-ui-white);
   background: rgba(100, 150, 160, 0.9);
   border-color: var(--hi-edge);
   transform: scale(1.15);
@@ -155,7 +155,7 @@ body:has(.holo-inventory.is-open) #crosshair {
 }
 
 .has-tabs .hi-arrow { display: block; }
-.hi-arrow:hover { color: #fff; }
+.hi-arrow:hover { color: var(--c-ui-white); }
 
 /* ───────────── Body ───────────── */
 
@@ -188,7 +188,7 @@ body:has(.holo-inventory.is-open) #crosshair {
   font-size: 17px;
   letter-spacing: 0.1em;
   text-align: center;
-  color: #f4fbfc;
+  color: var(--c-ui-bright);
   background: linear-gradient(180deg, rgba(110, 155, 163, 0.9), rgba(66, 98, 106, 0.9));
   clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%, 0 8px);
 }
@@ -232,7 +232,7 @@ body:has(.holo-inventory.is-open) #crosshair {
   right: 7px;
   bottom: 3px;
   font-size: 15px;
-  color: #fff;
+  color: var(--c-ui-white);
   text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
 }
 
@@ -338,8 +338,8 @@ body:has(.holo-inventory.is-open) #crosshair {
 .hi-desc-icon { grid-area: icon; width: 56px; height: 56px; object-fit: contain; align-self: center; }
 .hi-desc-icon[hidden] { display: block; visibility: hidden; }
 .hi-desc-title { grid-area: title; font-size: 22px; letter-spacing: 0.04em; }
-.hi-desc-text { grid-area: text; font-size: 16px; line-height: 1.4; color: #dbe7e9; }
-.hi-desc-hint { grid-area: hint; font-size: 14px; color: #ffb18a; }
+.hi-desc-text { grid-area: text; font-size: 16px; line-height: 1.4; color: var(--c-ui-soft); }
+.hi-desc-hint { grid-area: hint; font-size: 14px; color: var(--c-ui-hint); }
 
 /* ───────────── Footer hints ───────────── */
 
@@ -362,8 +362,8 @@ body:has(.holo-inventory.is-open) #crosshair {
   font-family: var(--font-holo);
   font-size: 13px;
   text-align: center;
-  color: #0c1416;
-  background: #e8f3f5;
+  color: var(--c-ui-dark);
+  background: var(--c-ui-ink);
   border-radius: 2px;
 }
 

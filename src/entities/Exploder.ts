@@ -17,6 +17,7 @@ import type { BloodParticleSystem } from '../graphics/BloodParticleSystem';
 import type { Player } from './Player';
 import type { LimbMesh, LimbType } from '../types';
 
+import { PALETTE } from '../graphics/Palette';
 /**
  * Exploder Necromorph Entity
  * Features:
@@ -65,8 +66,8 @@ export class Exploder {
 
   // Volatile glowing orange/yellow organic explosive material
   matSac = new MeshStandardMaterial({
-    color: 0xffaa00,
-    emissive: 0xff5500,
+    color: PALETTE.amber.core,
+    emissive: PALETTE.fire.blast,
     emissiveIntensity: 0.85,
     roughness: 0.2,
     metalness: 0.1
@@ -163,7 +164,7 @@ export class Exploder {
     this.armLGroup.add(this.sacGroup);
 
     // Glowing sac core point light
-    this.sacLight = new PointLight(0xff7700, 1.8, 4.0);
+    this.sacLight = new PointLight(PALETTE.fire.flame, 1.8, 4.0);
     this.sacLight.position.set(-0.15, -0.45, 0.15);
     this.armLGroup.add(this.sacLight);
 

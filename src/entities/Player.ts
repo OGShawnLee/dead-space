@@ -25,6 +25,7 @@ import type { SoundSystem } from '../core/SoundSystem';
 import type { InputState } from '../types';
 import { Inventory } from '../inventory/Inventory';
 
+import { PALETTE } from '../graphics/Palette';
 /**
  * Isaac Clarke Player Entity
  * Features:
@@ -117,7 +118,7 @@ export class Player {
     });
 
     const darkMetalMat = new MeshStandardMaterial({
-      color: 0x1f242b,
+      color: PALETTE.metal.m700,
       roughness: 0.7,
       metalness: 0.8
     });
@@ -144,7 +145,7 @@ export class Player {
     this.suitGroup.add(helmet);
 
     // Glowing cyan visor slits
-    const visorMat = new MeshBasicMaterial({ color: 0x00f0ff });
+    const visorMat = new MeshBasicMaterial({ color: PALETTE.cyan.core });
     for (let i = 0; i < 3; i++) {
       const slit = new Mesh(
         new BoxGeometry(0.24, 0.025, 0.05),
@@ -177,7 +178,7 @@ export class Player {
     for (let i = 0; i < numSegments; i++) {
       const segGeo = new BoxGeometry(0.09, segH, 0.12);
       const segMat = new MeshBasicMaterial({
-        color: 0x00f0ff
+        color: PALETTE.cyan.core
       });
       const segMesh = new Mesh(segGeo, segMat);
       segMesh.position.set(0, startY + i * (segH + segGap), -0.36);
@@ -217,7 +218,7 @@ export class Player {
     // Recessed dark groove under circular light
     const grooveGeo = new TorusGeometry(0.058, 0.008, 8, 32);
     const grooveMat = new MeshStandardMaterial({
-      color: 0x10141a,
+      color: PALETTE.metal.m900,
       roughness: 0.85,
       metalness: 0.6
     });
@@ -236,7 +237,7 @@ export class Player {
 
     for (let i = 0; i < numStasisSegments; i++) {
       const segGeo = new TorusGeometry(0.058, 0.0075, 8, 20, segArc);
-      const segMat = new MeshBasicMaterial({ color: 0x00f0ff });
+      const segMat = new MeshBasicMaterial({ color: PALETTE.cyan.core });
       const segMesh = new Mesh(segGeo, segMat);
       segMesh.position.set(0.17, 1.38, -0.355);
       segMesh.rotation.z = startOffsetAngle + i * (segArc + gap);
@@ -246,12 +247,12 @@ export class Player {
     }
 
     // Dedicated PointLight for the Stasis Gauge (illuminates shoulder and environment)
-    this.stasisLight = new PointLight(0x00f0ff, 1.4, 2.2);
+    this.stasisLight = new PointLight(PALETTE.cyan.core, 1.4, 2.2);
     this.stasisLight.position.set(0.17, 1.38, -0.42);
     this.suitGroup.add(this.stasisLight);
 
     // Dedicated Neon Back Light for the RIG Spine Aura
-    this.rigBackLight = new PointLight(0x00f0ff, 1.5, 2.5);
+    this.rigBackLight = new PointLight(PALETTE.cyan.core, 1.5, 2.5);
     this.rigBackLight.position.set(0, 1.15, -0.45);
     this.suitGroup.add(this.rigBackLight);
 
@@ -309,7 +310,7 @@ export class Player {
     this.weaponGroup.position.set(0.48, 1.05, 0.35);
 
     const metalMat = new MeshStandardMaterial({
-      color: 0x333b45,
+      color: PALETTE.metal.m500,
       metalness: 0.8,
       roughness: 0.3
     });
@@ -351,13 +352,13 @@ export class Player {
     this.weaponGroup.add(this.holoScreen);
 
     // Dynamic holographic glow light
-    this.holoLight = new PointLight(0x00f0ff, 0.5, 1.5);
+    this.holoLight = new PointLight(PALETTE.cyan.core, 0.5, 1.5);
     this.holoLight.position.copy(this.holoScreen.position);
     this.weaponGroup.add(this.holoLight);
 
     // 3 Aiming Lasers
     const laserMat = new LineBasicMaterial({
-      color: 0x00f0ff,
+      color: PALETTE.cyan.core,
       linewidth: 2,
       transparent: true,
       opacity: 0.85
@@ -375,7 +376,7 @@ export class Player {
   }
 
   buildFlashlight(): void {
-    this.spotLight = new SpotLight(0xd4e9ff, 4.5, 30, Math.PI / 6, 0.35, 1.2);
+    this.spotLight = new SpotLight(PALETTE.light.flashlight, 4.5, 30, Math.PI / 6, 0.35, 1.2);
     this.spotLight.position.set(0.28, 1.62, 0.15);
     this.spotLight.castShadow = true;
     this.spotLight.shadow.mapSize.width = 1024;
@@ -402,16 +403,16 @@ export class Player {
     const healthFrac = this.hp / this.maxHp;
     const activeSegments = Math.ceil(healthFrac * this.rigSegments.length);
 
-    let segColor = 0x00f0ff; // Full Cyan
-    if (healthFrac <= 0.25) segColor = 0xff2222; // Critical Red
-    else if (healthFrac <= 0.6) segColor = 0xff9900; // Warning Amber
+    let segColor = PALETTE.cyan.core; // Full Cyan
+    if (healthFrac <= 0.25) segColor = PALETTE.red.core; // Critical Red
+    else if (healthFrac <= 0.6) segColor = PALETTE.amber.core; // Warning Amber
 
     this.rigSegments.forEach((mesh, idx) => {
       if (idx < activeSegments) {
         mesh.material.color.setHex(segColor);
         mesh.visible = true;
       } else {
-        mesh.material.color.setHex(0x151c24);
+        mesh.material.color.setHex(PALETTE.metal.m900);
       }
     });
 
@@ -424,38 +425,38 @@ export class Player {
   updateStasisMeter(): void {
     if (!this.stasisSegmentMats || this.stasisSegmentMats.length === 0) return;
 
-    const unlitColor = 0x10141a;
+    const unlitColor = PALETTE.metal.m900;
 
     if (this.stasisCharges >= 3) {
       // 3 Charges: Full gauge, brilliant cyan
       for (let i = 0; i < 3; i++) {
-        this.stasisSegmentMats[i].color.setHex(0x00f0ff);
+        this.stasisSegmentMats[i].color.setHex(PALETTE.cyan.core);
         this.stasisSegmentMats[i].needsUpdate = true;
       }
       if (this.stasisLight) {
-        this.stasisLight.color.setHex(0x00f0ff);
+        this.stasisLight.color.setHex(PALETTE.cyan.core);
         this.stasisLight.intensity = 1.4;
       }
     } else if (this.stasisCharges === 2) {
       // 2 Charges: 2 segments active in amber, 3rd segment drained
-      this.stasisSegmentMats[0].color.setHex(0xff9900);
-      this.stasisSegmentMats[1].color.setHex(0xff9900);
+      this.stasisSegmentMats[0].color.setHex(PALETTE.amber.core);
+      this.stasisSegmentMats[1].color.setHex(PALETTE.amber.core);
       this.stasisSegmentMats[2].color.setHex(unlitColor);
       for (let i = 0; i < 3; i++) this.stasisSegmentMats[i].needsUpdate = true;
 
       if (this.stasisLight) {
-        this.stasisLight.color.setHex(0xff9900);
+        this.stasisLight.color.setHex(PALETTE.amber.core);
         this.stasisLight.intensity = 1.1;
       }
     } else if (this.stasisCharges === 1) {
       // 1 Charge: 1 segment active in critical red, other 2 drained
-      this.stasisSegmentMats[0].color.setHex(0xff2a2a);
+      this.stasisSegmentMats[0].color.setHex(PALETTE.red.core);
       this.stasisSegmentMats[1].color.setHex(unlitColor);
       this.stasisSegmentMats[2].color.setHex(unlitColor);
       for (let i = 0; i < 3; i++) this.stasisSegmentMats[i].needsUpdate = true;
 
       if (this.stasisLight) {
-        this.stasisLight.color.setHex(0xff2a2a);
+        this.stasisLight.color.setHex(PALETTE.red.core);
         this.stasisLight.intensity = 0.85;
       }
     } else {
@@ -513,11 +514,11 @@ export class Player {
     if (this.holoLight) {
       const ratio = this.ammo / Math.max(1, this.maxAmmo);
       if (ratio <= 0.2) {
-        this.holoLight.color.setHex(0xff2222);
+        this.holoLight.color.setHex(PALETTE.red.core);
       } else if (ratio <= 0.5) {
-        this.holoLight.color.setHex(0xff9900);
+        this.holoLight.color.setHex(PALETTE.amber.core);
       } else {
-        this.holoLight.color.setHex(0x00f0ff);
+        this.holoLight.color.setHex(PALETTE.cyan.core);
       }
     }
   }

@@ -1,10 +1,30 @@
 import { CanvasTexture, RepeatWrapping } from 'three';
+import { PALETTE, hex } from './Palette';
 
 /**
  * Procedural Texture Generator
  * Generates all textures in runtime using HTML5 Canvas (Zero external image dependencies)
  */
 export class TextureFactory {
+  private static surfaceCache = new Map<string, CanvasTexture>();
+
+  /** Cached surface texture by id; shared between materials until `disposeSurfaces()`. */
+  static surface(id: 'metalWall' | 'floorGrate' | 'ceiling'): CanvasTexture {
+    let tex = this.surfaceCache.get(id);
+    if (!tex) {
+      tex = id === 'metalWall' ? this.createMetalWall()
+        : id === 'floorGrate' ? this.createFloorGrate()
+        : this.createCeiling();
+      this.surfaceCache.set(id, tex);
+    }
+    return tex;
+  }
+
+  static disposeSurfaces(): void {
+    this.surfaceCache.forEach(t => t.dispose());
+    this.surfaceCache.clear();
+  }
+
   static createMetalWall(): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
@@ -12,27 +32,27 @@ export class TextureFactory {
     const ctx = canvas.getContext('2d')!;
 
     const grad = ctx.createLinearGradient(0, 0, 512, 512);
-    grad.addColorStop(0, '#1a1d22');
-    grad.addColorStop(0.5, '#262a30');
-    grad.addColorStop(1, '#16181c');
+    grad.addColorStop(0, hex(PALETTE.metal.m800));
+    grad.addColorStop(0.5, hex(PALETTE.metal.m700));
+    grad.addColorStop(1, hex(PALETTE.metal.m800));
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 512);
 
-    ctx.strokeStyle = '#0e1014';
+    ctx.strokeStyle = hex(PALETTE.metal.m900);
     ctx.lineWidth = 8;
     ctx.strokeRect(16, 16, 480, 480);
     ctx.strokeRect(16, 250, 480, 2);
 
-    ctx.strokeStyle = '#3d4450';
+    ctx.strokeStyle = hex(PALETTE.metal.m500);
     ctx.lineWidth = 2;
     ctx.strokeRect(20, 20, 472, 472);
 
     const drawBolt = (x: number, y: number) => {
-      ctx.fillStyle = '#0a0c0e';
+      ctx.fillStyle = hex(PALETTE.metal.m900);
       ctx.beginPath();
       ctx.arc(x, y, 7, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = '#6b7280';
+      ctx.fillStyle = hex(PALETTE.metal.m300);
       ctx.beginPath();
       ctx.arc(x - 1, y - 1, 4, 0, Math.PI * 2);
       ctx.fill();
@@ -65,11 +85,11 @@ export class TextureFactory {
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
-    ctx.fillStyle = '#101216';
+    ctx.fillStyle = hex(PALETTE.metal.m900);
     ctx.fillRect(0, 0, 256, 256);
 
-    ctx.fillStyle = '#030405';
-    ctx.strokeStyle = '#2b313a';
+    ctx.fillStyle = hex(PALETTE.metal.void);
+    ctx.strokeStyle = hex(PALETTE.metal.m700);
     ctx.lineWidth = 2;
 
     const cols = 8;
@@ -101,13 +121,13 @@ export class TextureFactory {
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
-    ctx.fillStyle = '#14171c';
+    ctx.fillStyle = hex(PALETTE.metal.m800);
     ctx.fillRect(0, 0, 256, 256);
 
-    ctx.fillStyle = '#090a0d';
+    ctx.fillStyle = hex(PALETTE.metal.void);
     ctx.fillRect(20, 20, 216, 216);
 
-    ctx.strokeStyle = '#222830';
+    ctx.strokeStyle = hex(PALETTE.metal.m700);
     ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.moveTo(0, 128); ctx.lineTo(256, 128);
@@ -127,8 +147,8 @@ export class TextureFactory {
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
-    const color1 = red ? '#cc1111' : '#f59e0b';
-    const color2 = '#111317';
+    const color1 = red ? hex(PALETTE.red.mid) : hex(PALETTE.amber.mid);
+    const color2 = hex(PALETTE.metal.m900);
 
     ctx.fillStyle = color2;
     ctx.fillRect(0, 0, 256, 256);
@@ -157,10 +177,10 @@ export class TextureFactory {
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
-    ctx.fillStyle = '#5c4528';
+    ctx.fillStyle = hex(PALETTE.rust.rust);
     ctx.fillRect(0, 0, 256, 256);
 
-    ctx.strokeStyle = '#2d2214';
+    ctx.strokeStyle = hex(PALETTE.rust.grease);
     ctx.lineWidth = 4;
     for (let y = 8; y < 256; y += 14) {
       ctx.beginPath();
@@ -169,7 +189,7 @@ export class TextureFactory {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = '#8c6b40';
+    ctx.strokeStyle = hex(PALETTE.rust.bronze);
     ctx.lineWidth = 1;
     for (let y = 10; y < 256; y += 14) {
       ctx.beginPath();
@@ -187,7 +207,7 @@ export class TextureFactory {
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
-    ctx.fillStyle = '#83776e';
+    ctx.fillStyle = hex(PALETTE.flesh.bone);
     ctx.fillRect(0, 0, 256, 256);
 
     for (let i = 0; i < 60; i++) {
@@ -232,26 +252,26 @@ export class TextureFactory {
 
     // Color thresholds: Blue (> 50%) -> Orange (21-50%) -> Red (<= 20%)
     const ratio = ammo / Math.max(1, maxAmmo);
-    let mainColor = '#00f0ff';
+    let mainColor = hex(PALETTE.cyan.core);
     let glowColor = 'rgba(0, 240, 255, 0.25)';
     let scanlineFill = 'rgba(0, 240, 255, 0.08)';
     let frameColor = 'rgba(0, 240, 255, 0.65)';
-    let subTextColor = '#7dd3fc';
+    let subTextColor = hex(PALETTE.cyan.dim);
 
     if (ratio <= 0.2) {
       // Critical Red (0 to 2 shots)
-      mainColor = '#ff2222';
+      mainColor = hex(PALETTE.red.core);
       glowColor = 'rgba(255, 34, 34, 0.25)';
       scanlineFill = 'rgba(255, 34, 34, 0.12)';
       frameColor = 'rgba(255, 34, 34, 0.75)';
-      subTextColor = '#fca5a5';
+      subTextColor = hex(PALETTE.red.dim);
     } else if (ratio <= 0.5) {
       // Warning Orange / Amber (3 to 5 shots)
-      mainColor = '#ff9900';
+      mainColor = hex(PALETTE.amber.core);
       glowColor = 'rgba(255, 153, 0, 0.25)';
       scanlineFill = 'rgba(255, 153, 0, 0.10)';
       frameColor = 'rgba(255, 153, 0, 0.75)';
-      subTextColor = '#fdba74';
+      subTextColor = hex(PALETTE.amber.dim);
     }
 
     // Outer subtle boundary frame

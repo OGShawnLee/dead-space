@@ -22,6 +22,7 @@ import {
 import { SoundSystem } from './SoundSystem';
 import { InputManager } from './InputManager';
 import { ShipLevel } from '../world/ShipLevel';
+import type { AreaTheme } from '../world/AreaTheme';
 import { BloodParticleSystem } from '../graphics/BloodParticleSystem';
 import { Player } from '../entities/Player';
 import { Necromorph } from '../entities/Necromorph';
@@ -43,6 +44,7 @@ import { HoloInventory } from '../ui/HoloInventory';
 import type { GibPart } from '../world/GibPart';
 import type { CameraSettings, InputState, LimbMesh } from '../types';
 
+import { PALETTE } from '../graphics/Palette';
 /** Input fed to the player while the inventory is open: Isaac is rooted. */
 const INACTIVE_INPUT: InputState = {
   forward: false,
@@ -110,6 +112,7 @@ export class DeadSpaceGame {
     this.initThree();
     this.sound = new SoundSystem();
     this.level = new ShipLevel(this.scene);
+    this.applyAtmosphere(this.level.theme);
     this.bloodSys = new BloodParticleSystem(this.scene);
 
     this.player = new Player(this.scene, this.sound, this.level.playerStart);
@@ -159,9 +162,19 @@ export class DeadSpaceGame {
     if (typeof this.settings.volume === 'number') this.sound.setMasterVolume(this.settings.volume);
   }
 
+  /** Fog and ambient come from the area theme, not constants. */
+  applyAtmosphere(theme: AreaTheme): void {
+    const a = theme.atmosphere;
+    const fog = this.scene.fog as FogExp2;
+    fog.color.set(a.fogColor);
+    fog.density = a.fogDensity;
+    this.ambientLight.color.set(a.ambientColor);
+    this.ambientLight.intensity = a.ambientIntensity;
+  }
+
   initThree(): void {
     this.scene = new Scene();
-    this.scene.fog = new FogExp2(0x050608, 0.08);
+    this.scene.fog = new FogExp2(PALETTE.metal.void, 0);
 
     this.camera = new PerspectiveCamera(68, window.innerWidth / window.innerHeight, 0.1, 100);
 
@@ -172,7 +185,7 @@ export class DeadSpaceGame {
     this.renderer.shadowMap.type = PCFSoftShadowMap;
     this.container.appendChild(this.renderer.domElement);
 
-    this.ambientLight = new AmbientLight(0x080b12, 0.18);
+    this.ambientLight = new AmbientLight(PALETTE.ambient, 0);
     this.scene.add(this.ambientLight);
 
     window.addEventListener('resize', () => {
@@ -303,14 +316,14 @@ export class DeadSpaceGame {
 
       const coreMesh = new Mesh(
         new SphereGeometry(0.18, 12, 12),
-        new MeshBasicMaterial({ color: 0x00f0ff })
+        new MeshBasicMaterial({ color: PALETTE.cyan.core })
       );
       orbGroup.add(coreMesh);
 
       const haloMesh = new Mesh(
         new SphereGeometry(0.32, 8, 8),
         new MeshBasicMaterial({
-          color: 0x38b6ff,
+          color: PALETTE.cyan.mid,
           wireframe: true,
           transparent: true,
           opacity: 0.6
@@ -318,7 +331,7 @@ export class DeadSpaceGame {
       );
       orbGroup.add(haloMesh);
 
-      const orbLight = new PointLight(0x00f0ff, 2.5, 5.0);
+      const orbLight = new PointLight(PALETTE.cyan.core, 2.5, 5.0);
       orbGroup.add(orbLight);
 
       this.scene.add(orbGroup);
@@ -413,7 +426,7 @@ export class DeadSpaceGame {
   createPlasmaBeamTracer(start: Vector3, end: Vector3): void {
     const geom = new BufferGeometry().setFromPoints([start, end]);
     const mat = new LineBasicMaterial({
-      color: 0x00f0ff,
+      color: PALETTE.cyan.core,
       linewidth: 3,
       transparent: true,
       opacity: 0.95
@@ -421,7 +434,7 @@ export class DeadSpaceGame {
     const line = new Line(geom, mat);
     this.scene.add(line);
 
-    const muzzleLight = new PointLight(0x00f0ff, 4.0, 5.0);
+    const muzzleLight = new PointLight(PALETTE.cyan.core, 4.0, 5.0);
     muzzleLight.position.copy(start);
     this.scene.add(muzzleLight);
 

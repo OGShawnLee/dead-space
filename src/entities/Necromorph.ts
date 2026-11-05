@@ -17,6 +17,7 @@ import type { BloodParticleSystem } from '../graphics/BloodParticleSystem';
 import type { Player } from './Player';
 import type { LimbMesh, LimbType } from '../types';
 
+import { PALETTE } from '../graphics/Palette';
 /**
  * Necromorph (Slasher) Entity
  * Features:
@@ -59,7 +60,7 @@ export class Necromorph {
     metalness: 0.15
   });
   matBlade = new MeshStandardMaterial({
-    color: 0xd8c8b8,
+    color: PALETTE.flesh.skin,
     roughness: 0.3,
     metalness: 0.8
   });

@@ -12,8 +12,8 @@
 
 .holo-menu {
   --font-holo: 'Geist Pixel Line', var(--font-mono);
-  --holo-ink: #e4f1f3;
-  --holo-ink-dim: #9fb9be;
+  --holo-ink: var(--c-ui-ink);
+  --holo-ink-dim: var(--c-ui-dim);
   --holo-edge: rgba(170, 220, 228, 0.55);
   --holo-edge-soft: rgba(170, 220, 228, 0.22);
   --holo-row: linear-gradient(90deg, rgba(48, 72, 80, 0.88), rgba(30, 48, 55, 0.82));
@@ -280,7 +280,7 @@ body.in-main-menu #hud {
 .holo-header-text {
   font-size: 24px;
   letter-spacing: 0.06em;
-  color: #f4fbfc;
+  color: var(--c-ui-bright);
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
   white-space: nowrap;
   overflow: hidden;
@@ -383,7 +383,7 @@ body.in-main-menu #hud {
 }
 
 .holo-item.is-focused {
-  color: #ffffff;
+  color: var(--c-ui-white);
   transform: translate3d(-4px, 0, 0) scale(1.02);
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
 }
@@ -463,7 +463,7 @@ body.in-main-menu #hud {
 
 .holo-switch.is-on .holo-switch-bar {
   left: 25px;
-  background: #ffffff;
+  background: var(--c-ui-white);
   box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
 }
 
@@ -497,7 +497,7 @@ body.in-main-menu #hud {
   width: 4px;
   height: 14px;
   margin-left: -2px;
-  background: #ffffff;
+  background: var(--c-ui-white);
 }
 
 .holo-slider-val {
@@ -545,7 +545,7 @@ body.in-main-menu #hud {
 }
 
 .holo-select-pips i.is-on {
-  background: #ffffff;
+  background: var(--c-ui-white);
 }
 
 .holo-keys {
@@ -563,8 +563,8 @@ body.in-main-menu #hud {
   font-size: 13px;
   line-height: 1.2;
   text-align: center;
-  color: #0c1416;
-  background: #e8f3f5;
+  color: var(--c-ui-dark);
+  background: var(--c-ui-ink);
   border-radius: 2px;
 }
 
@@ -578,7 +578,7 @@ body.in-main-menu #hud {
 }
 
 .holo-item.is-danger .holo-info-val {
-  color: #ff9a8f;
+  color: var(--c-red-dim);
 }
 
 .holo-text {
@@ -651,18 +651,18 @@ body.in-main-menu #hud {
 .holo-desc-title {
   font-size: 22px;
   margin-bottom: 14px;
-  color: #ffffff;
+  color: var(--c-ui-white);
   text-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
 }
 
 .holo-desc-body {
   font-size: 17px;
   line-height: 1.5;
-  color: #dbe7e9;
+  color: var(--c-ui-soft);
 }
 
-.holo-desc--danger .holo-desc-title { color: #ff8b80; }
-.holo-desc--success .holo-desc-title { color: #8ff0b5; }
+.holo-desc--danger .holo-desc-title { color: var(--c-red-dim); }
+.holo-desc--success .holo-desc-title { color: var(--c-green-dim); }
 
 @media (max-width: 900px) {
   .holo-menu { --holo-panel-w: min(520px, 88vw); }

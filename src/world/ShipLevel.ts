@@ -14,8 +14,10 @@ import {
   type Scene
 } from 'three';
 import { TextureFactory } from '../graphics/TextureFactory';
+import { PALETTE } from '../graphics/Palette';
 import type { PickupItem, EscapeZone } from '../types';
 import type { ItemId } from '../inventory/ItemDefs';
+import { getTheme, type AreaTheme, type LightKind, type SurfaceDef, type ThemeId } from './AreaTheme';
 
 export interface FlickerLightItem {
   light: PointLight;
@@ -46,32 +48,30 @@ export class ShipLevel {
   matCeiling!: MeshStandardMaterial;
   matEscape!: MeshStandardMaterial;
 
-  constructor(public scene: Scene) {
+  theme: AreaTheme;
+
+  constructor(public scene: Scene, themeId: ThemeId = 'ishimura-default') {
+    this.theme = getTheme(themeId);
     this.initMaterials();
     this.buildLevel();
   }
 
+  private makeSurface(def: SurfaceDef): MeshStandardMaterial {
+    return new MeshStandardMaterial({
+      map: TextureFactory.surface(def.texture),
+      roughness: def.roughness,
+      metalness: def.metalness
+    });
+  }
+
   initMaterials(): void {
-    this.matWall = new MeshStandardMaterial({
-      map: TextureFactory.createMetalWall(),
-      roughness: 0.3,
-      metalness: 0.9
-    });
-
-    this.matFloor = new MeshStandardMaterial({
-      map: TextureFactory.createFloorGrate(),
-      roughness: 0.4,
-      metalness: 0.8
-    });
-
-    this.matCeiling = new MeshStandardMaterial({
-      map: TextureFactory.createCeiling(),
-      roughness: 0.5,
-      metalness: 0.65
-    });
+    const { wall, floor, ceiling } = this.theme.surfaces;
+    this.matWall = this.makeSurface(wall);
+    this.matFloor = this.makeSurface(floor);
+    this.matCeiling = this.makeSurface(ceiling);
     this.matEscape = new MeshStandardMaterial({
-      color: 0x00ff66,
-      emissive: 0x00aa44,
+      color: PALETTE.green.mid,
+      emissive: PALETTE.green.mid,
       emissiveIntensity: 0.6,
       roughness: 0.2
     });
@@ -172,8 +172,8 @@ export class ShipLevel {
               this.spawnPoints.push(new Vector3(wx, 0, wz));
             }
 
-            if (Math.random() < 0.14) {
-              this.createCorridorLight(wx, wz, Math.random() < 0.35 ? 'red' : 'white');
+            if (Math.random() < this.theme.lights.density) {
+              this.createCorridorLight(wx, wz, this.pickLightKind());
             }
 
             if (Math.random() < 0.22) {
@@ -187,10 +187,20 @@ export class ShipLevel {
     }
   }
 
-  createCorridorLight(x: number, z: number, type: 'red' | 'white'): void {
-    const isRed = type === 'red';
-    const color = isRed ? 0xff2222 : 0xd8e8ff;
-    const light = new PointLight(color, isRed ? 1.4 : 1.0, 7.5);
+  private pickLightKind(): LightKind {
+    const { kinds } = this.theme.lights;
+    const total = kinds.reduce((sum, k) => sum + k.share, 0);
+    let r = Math.random() * total;
+    for (const k of kinds) {
+      r -= k.share;
+      if (r <= 0) return k.kind;
+    }
+    return kinds[kinds.length - 1].kind;
+  }
+
+  createCorridorLight(x: number, z: number, kind: LightKind): void {
+    const color = kind.color;
+    const light = new PointLight(color, kind.intensity, kind.distance);
     light.position.set(x, this.wallHeight - 0.35, z);
     this.scene.add(light);
 
@@ -204,13 +214,13 @@ export class ShipLevel {
       light: light,
       fixture: fixture,
       baseIntensity: light.intensity,
-      isFlickering: isRed || Math.random() < 0.5,
+      isFlickering: Math.random() < kind.flicker,
       flickerSpeed: Math.random() * 8 + 4
     });
   }
 
   createEscapeChamber(x: number, z: number): void {
-    const greenLight = new PointLight(0x00ff66, 3.5, 12);
+    const greenLight = new PointLight(PALETTE.green.mid, 3.5, 12);
     greenLight.position.set(x, this.wallHeight - 0.4, z);
     this.scene.add(greenLight);
 
@@ -221,7 +231,7 @@ export class ShipLevel {
 
     const beaconGeo = new CylinderGeometry(2, 2, this.wallHeight, 16, 1, true);
     const beaconMat = new MeshBasicMaterial({
-      color: 0x00ff66,
+      color: PALETTE.green.mid,
       transparent: true,
       opacity: 0.18,
       side: DoubleSide
@@ -232,7 +242,7 @@ export class ShipLevel {
 
     const consoleGeo = new BoxGeometry(1.0, 1.2, 0.6);
     const consoleMat = new MeshStandardMaterial({
-      color: 0x22262c,
+      color: PALETTE.metal.m700,
       roughness: 0.4
     });
     const consoleMesh = new Mesh(consoleGeo, consoleMat);
@@ -240,7 +250,7 @@ export class ShipLevel {
     this.scene.add(consoleMesh);
 
     const screenGeo = new PlaneGeometry(0.7, 0.4);
-    const screenMat = new MeshBasicMaterial({ color: 0x00ff88 });
+    const screenMat = new MeshBasicMaterial({ color: PALETTE.green.core });
     const screen = new Mesh(screenGeo, screenMat);
     screen.position.set(x, 0.9, z - 1.19);
     this.scene.add(screen);
@@ -252,21 +262,21 @@ export class ShipLevel {
     if (type === 'plasma_energy') {
       const geo = new BoxGeometry(0.45, 0.25, 0.35);
       const mat = new MeshStandardMaterial({
-        color: 0x00a8cc,
-        emissive: 0x00e5ff,
+        color: PALETTE.cyan.mid,
+        emissive: PALETTE.cyan.mid,
         emissiveIntensity: 0.5,
         roughness: 0.3
       });
       const mesh = new Mesh(geo, mat);
       group.add(mesh);
-      const pl = new PointLight(0x00e5ff, 0.6, 2.5);
+      const pl = new PointLight(PALETTE.cyan.mid, 0.6, 2.5);
       group.add(pl);
     } else if (type === 'stasis_pack') {
       // Hexagonal Stasis Recharge Battery Pack
       const geo = new CylinderGeometry(0.18, 0.18, 0.4, 6);
       const mat = new MeshStandardMaterial({
-        color: 0x0284c7,
-        emissive: 0x00f0ff,
+        color: PALETTE.cyan.mid,
+        emissive: PALETTE.cyan.mid,
         emissiveIntensity: 0.8,
         roughness: 0.2,
         metalness: 0.5
@@ -275,24 +285,24 @@ export class ShipLevel {
       group.add(mesh);
 
       const ringGeo = new TorusGeometry(0.22, 0.03, 8, 16);
-      const ringMat = new MeshBasicMaterial({ color: 0x00f0ff });
+      const ringMat = new MeshBasicMaterial({ color: PALETTE.cyan.core });
       const ring = new Mesh(ringGeo, ringMat);
       ring.rotation.x = Math.PI / 2;
       group.add(ring);
 
-      const pl = new PointLight(0x00f0ff, 0.9, 2.8);
+      const pl = new PointLight(PALETTE.cyan.mid, 0.9, 2.8);
       group.add(pl);
     } else {
       const geo = new CylinderGeometry(0.2, 0.2, 0.45, 8);
       const mat = new MeshStandardMaterial({
-        color: 0x15803d,
-        emissive: 0x22c55e,
+        color: PALETTE.green.mid,
+        emissive: PALETTE.green.mid,
         emissiveIntensity: 0.5,
         roughness: 0.3
       });
       const mesh = new Mesh(geo, mat);
       group.add(mesh);
-      const pl = new PointLight(0x22c55e, 0.6, 2.5);
+      const pl = new PointLight(PALETTE.green.mid, 0.6, 2.5);
       group.add(pl);
     }
 

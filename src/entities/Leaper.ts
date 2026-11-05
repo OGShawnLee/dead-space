@@ -17,6 +17,7 @@ import type { BloodParticleSystem } from '../graphics/BloodParticleSystem';
 import type { Player } from './Player';
 import type { LimbMesh, LimbType } from '../types';
 
+import { PALETTE } from '../graphics/Palette';
 /**
  * Leaper Necromorph Entity
  * Features:
@@ -67,7 +68,7 @@ export class Leaper {
   });
 
   matBlade = new MeshStandardMaterial({
-    color: 0x2d3748,
+    color: PALETTE.flesh.leather,
     roughness: 0.25,
     metalness: 0.85
   });

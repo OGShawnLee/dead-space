@@ -1,4 +1,5 @@
 import type { ItemId } from './ItemDefs';
+import { PALETTE, hex } from '../graphics/Palette';
 
 /**
  * Procedural item icons (zero-assets rule: drawn on a canvas, cached as data URLs).
@@ -6,8 +7,8 @@ import type { ItemId } from './ItemDefs';
  */
 
 const SIZE = 128;
-const INK = '#d8f3f7';
-const EDGE = '#86bcc7';
+const INK = hex(PALETTE.ui.ink);
+const EDGE = hex(PALETTE.cyan.dim);
 const FILL = 'rgba(120, 180, 192, 0.32)';
 
 type Painter = (c: CanvasRenderingContext2D) => void;
