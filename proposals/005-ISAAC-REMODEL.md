@@ -40,7 +40,7 @@ The suit is a **soft, worn engineering jumpsuit with a few copper armor pieces**
 | **Gloves** | Black gloves with **individual fingers**, slightly bent at rest, rubber knuckle pads. | Black rubber/leather |
 | **Legs** | Charcoal work trousers, **cargo pocket on the thigh** with flap, thigh strap with copper buckle, **knee pad** layered on top, creases at knee and hip. | Dark fabric, black pads, copper buckle |
 | **Boots** | **Tall copper armored boots**: ribbed shin guard that wraps the calf, thick layered sole, ankle buckles/straps, heavy toe. This is the most "metal" part of the lower body. | Copper (darker than helmet), black sole |
-| **RIG (back)** | A **vertical glowing tube running from under the helmet down the spine**, mounted in a **copper-ribbed housing** (stacked vertebra plates on one side), a power cable curving to the belt, a copper connector ring at the lower end, a small pack at the upper back. The tube follows the curve of the back. | Copper housing; tube emissive blue-white (our health bar: cyan > amber > red) |
+| **RIG (back)** | A **vertical glowing tube running from under the helmet down the spine**, mounted in a **copper-ribbed housing** (stacked vertebra plates on one side), a power cable curving to the belt, a copper connector ring at the lower end, a small pack at the upper back. The tube follows the curve of the back. | Copper housing; tube emissive pale blue-white (our health bar: `rig.ok` > `rig.warn` > `rig.crit`, desaturated) |
 | **Silhouette** | Heroic but human proportions (about 7.5 heads), broad shoulders, slightly forward head carriage, hands low and relaxed, boots chunky. | n/a |
 
 Style notes: nothing is clean. There is **edge wear** on copper (lighter where metal shows), **darker recesses** in grooves, fabric **creases**, and small repeated hardware (rivets, buckles, bolts). The color story is "olive fabric + copper" with cold blue-white light as the only bright accent.
@@ -59,7 +59,7 @@ External code depends on these members. The new model must keep them (as the sam
 | Engine (stasis shot) | `player.armL.getWorldPosition(...)` | Needs a **left hand/forearm Object3D** (`armL`) whose world position is where the stasis projectile spawns (currently + (0, 0.1, 0.25)) |
 | Engine (plasma beam) | `player.weaponGroup.getWorldPosition(...)` | Needs the **weapon muzzle area** Object3D (`weaponGroup`); the beam starts there. Holo ammo screen and 3 lasers live in this group |
 | Camera | `player.setProximityOpacity(a)` | Fades the whole suit when the camera is close. Must traverse every material of the new model (and the weapon). See risks (section 10) |
-| Player internals | `rigSegments` (6 meshes, `MeshBasicMaterial`, colored by `updateRigSpine`), `stasisSegmentMats` (3 arcs, colored by `updateStasisMeter`), `stasisLight`, `rigBackLight`, `holoScreen`, `holoLight`, `laserLine`, `spotLight` + `spotTarget` | Keep the **same behavior and colors**: cyan > amber > red > dark (`PALETTE.cyan.core`, `amber.core`, `red.core`, `metal.m900`) |
+| Player internals | `rigSegments` (6 meshes, `MeshBasicMaterial`, colored by `updateRigSpine`), `stasisSegmentMats` (3 arcs, colored by `updateStasisMeter`), `stasisLight`, `rigBackLight`, `holoScreen`, `holoLight`, `laserLine`, `spotLight` + `spotTarget` | Keep the **same behavior and state order**: ok > warn > crit > off, now with the desaturated `PALETTE.rig.ok`, `rig.warn`, `rig.crit`, `rig.off` (`metal.m900`) instead of the old neon `cyan/amber/red.core` |
 | Camera | head anchor at `root.position + (0, 1.45, 0)` | If the new Isaac is taller or the head sits elsewhere, update the two `1.45` uses (`ThirdPersonCamera.ts`, `setInventoryShot` and `update`) consistently |
 
 Design rule: **`Player` keeps gameplay; a new `IsaacModel` owns visuals and animation.** `Player.update()` computes intent (velocity, aiming, stasis timer, etc.) and calls `model.update(dt, state)`. `Player` exposes `armL`, `weaponGroup`, `rigSegments`, ... as getters that point into the model.
@@ -122,7 +122,7 @@ weapon: {
 }
 ```
 
-Existing `rust.bronze` (0x8a6a43) is the old suit tone; migrate its users (`createSuitTexture`) to `suit.*`. The RIG light and visor keep using `cyan.core` (the owner's rule: cyan `core` is reserved for Isaac's tech). Do not add hex literals anywhere else.
+Existing `rust.bronze` (0x8a6a43) is the old suit tone; migrate its users (`createSuitTexture`) to `suit.*`. The RIG light and the visor use the desaturated `rig.*` tokens above (owner decision, section 11.1), **not** `cyan.core`. Do not add hex literals anywhere else.
 
 ---
 
@@ -171,7 +171,7 @@ All built from lathe/extrude/tube/rounded-box helpers (write a `roundedBox`, `be
 ### 5.4 RIG spine (the identity piece)
 
 - A **curved tube housing** following a `CatmullRomCurve3` along the back (neck base to lower back), copper ribs (stacked vertebra plates) on the outside, the glowing tube inside.
-- The glowing tube is split into **6 segments** (`rigSegments`, `MeshBasicMaterial`) so `updateRigSpine()` keeps working (colors cyan > amber > red; inactive = `metal.m900`). Add a soft additive glow sprite/gradient behind each segment (cheap), not post-processing.
+- The glowing tube is split into **6 segments** (`rigSegments`, `MeshBasicMaterial`) so `updateRigSpine()` keeps working (colors `rig.ok` > `rig.warn` > `rig.crit`; inactive = `metal.m900`). Add a soft additive glow sprite/gradient behind each segment (cheap), not post-processing.
 - Cable from the housing to the belt (tube with spring secondary motion), connector ring at the base, upper-back pack.
 - **Stasis socket** on the right shoulder blade (3 arcs + node), same behavior as now.
 - Keep `rigBackLight` and `stasisLight` (point lights). Mind the light budget.
@@ -231,7 +231,7 @@ Validation: write bun scripts that step the animator and assert joint limits (el
 - **Fabric**: weave pattern + fine noise, vertical stitching lines, darker creases and seam highlights; normal/roughness derived (`surfaceMaps`), roughness ~0.85, metalness 0.
 - **Copper**: base `suit.copper`, grooves in `copperDark`, **edge wear** in `copperHi`, scattered rivets, faint `patina` in crevices; **matte** (roughness ~0.6, metalness ~0.4). The owner finds the world too shiny; copper should read as warm, worn, not chrome.
 - **Black panels/gloves**: rubber/leather, roughness ~0.7, subtle stitch and wrinkle normals.
-- **Visor/RIG**: `MeshBasicMaterial` with `cyan.core`, plus a gradient glow texture; the white-blue look in the reference can be achieved by mixing a lighter center in the gradient (token-based).
+- **Visor/RIG**: `MeshBasicMaterial` with `rig.ok` / `rig.glow`, plus a gradient glow texture; the white-blue look in the reference can be achieved by mixing a lighter center in the gradient (token-based).
 - All through `TextureFactory` (new ids in `SurfaceId`), cached, disposed with `disposeSurfaces()`.
 
 ---
