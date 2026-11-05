@@ -2,7 +2,7 @@
 // Usage: bun scripts/isaac-check.ts
 // Builds the new model and the legacy one against a stub DOM/sound, steps the
 // animation through several poses and checks the contract with Engine/camera.
-import { Box3, Color, Mesh, PerspectiveCamera, Raycaster, Scene, Vector3, type Material, type Object3D } from 'three';
+import { Box3, Color, DoubleSide, Matrix4, Mesh, MeshBasicMaterial, PerspectiveCamera, Raycaster, Scene, Vector3, type InstancedMesh, type Material, type Object3D } from 'three';
 
 // ── Minimal DOM stub: canvases with a no-op 2D context ──
 const ctx2d: any = new Proxy({}, { get: (t: any, k) => (k in t ? t[k] : () => ({})), set: (t: any, k, v) => ((t[k] = v), true) });
@@ -13,8 +13,9 @@ const ctx2d: any = new Proxy({}, { get: (t: any, k) => (k in t ? t[k] : () => ({
 
 const { Player } = await import('../src/entities/Player');
 const { PALETTE } = await import('../src/graphics/Palette');
-const { BONE_DEFS, JOINT_LIMITS, HAND_LENGTH } = await import('../src/entities/isaac/IsaacSkeleton');
-const { TORSO_SECTIONS, sampleSection } = await import('../src/entities/isaac/IsaacBody');
+const { BONE_DEFS, BONE_INDEX, JOINT_LIMITS, HAND_LENGTH, bindPosition } = await import('../src/entities/isaac/IsaacSkeleton');
+const { TORSO_SECTIONS, sampleSection, armSections } = await import('../src/entities/isaac/IsaacBody');
+const { chunkGeometry } = await import('../src/entities/isaac/GearKit');
 const sound: any = new Proxy({}, { get: () => () => {} });
 
 let failures = 0;
@@ -51,10 +52,227 @@ function stats(root: Object3D) {
     if (!m.isMesh) return;
     meshes++;
     const g = m.geometry;
-    tris += (g.index ? g.index.count : g.attributes.position.count) / 3;
+    const instances = (m as unknown as InstancedMesh).isInstancedMesh ? (m as unknown as InstancedMesh).count : 1;
+    tris += ((g.index ? g.index.count : g.attributes.position.count) / 3) * instances;
     (Array.isArray(m.material) ? m.material : [m.material]).forEach(x => mats.add(x));
   });
   return { tris: Math.round(tris), meshes, mats: mats.size };
+}
+
+/** Points bucketed in a uniform grid for radius queries. */
+class PointGrid {
+  private cells = new Map<string, { p: Vector3; tag: number }[]>();
+  constructor(private readonly size: number) {}
+  private key(x: number, y: number, z: number) { return `${x},${y},${z}`; }
+  add(p: Vector3, tag: number) {
+    const k = this.key(Math.floor(p.x / this.size), Math.floor(p.y / this.size), Math.floor(p.z / this.size));
+    (this.cells.get(k) ?? this.cells.set(k, []).get(k)!).push({ p, tag });
+  }
+  /** Nearest distance from `p` to a point whose tag passes `ok` (Infinity beyond one cell). */
+  nearest(p: Vector3, ok: (tag: number) => boolean): number {
+    const cx = Math.floor(p.x / this.size), cy = Math.floor(p.y / this.size), cz = Math.floor(p.z / this.size);
+    let best = Infinity;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      for (const e of this.cells.get(this.key(cx + dx, cy + dy, cz + dz)) ?? []) if (ok(e.tag)) best = Math.min(best, e.p.distanceTo(p));
+    }
+    return best;
+  }
+}
+
+/** Gear checks (phase 3) and the phase 3 body adjustments. Run in the bind pose. */
+function gearChecks(p: any) {
+  const model = p.model;
+  const gear = model.gear;
+  const body = model.body;
+  const bone = model.bones.bone;
+  const v = new Vector3(), raw = new Vector3();
+
+  // No plain boxes as visible armor: only the provisional RIG segments and Plasma Cutter (phase 5)
+  let boxes = 0;
+  model.root.traverse((o: Object3D) => {
+    const m = o as Mesh;
+    if (!m.isMesh || m.geometry.type !== 'BoxGeometry') return;
+    let w: Object3D | null = o;
+    while (w && w !== p.weaponGroup) w = w.parent;
+    if (!w && !p.rigSegments.includes(m)) boxes++;
+  });
+  check(boxes === 0, `no BoxGeometry armor outside the phase-5 placeholders (${boxes})`);
+
+  // Rigid skinning: one bone, weight 1, and the bound gear matches its geometry
+  for (const mesh of [gear.metal, gear.soft, gear.visor, gear.gloves]) {
+    const g = mesh.geometry, si = g.attributes.skinIndex, sw = g.attributes.skinWeight, pos = g.attributes.position;
+    let bad = 0, err = 0;
+    for (let i = 0; i < sw.count; i++) {
+      if (sw.getX(i) !== 1 || sw.getY(i) || sw.getZ(i) || sw.getW(i) || si.getX(i) >= BONE_DEFS.length) bad++;
+      mesh.getVertexPosition(i, v);
+      err = Math.max(err, v.distanceTo(raw.fromBufferAttribute(pos, i)));
+    }
+    check(bad === 0 && err < 1e-5, `${mesh.name}: rigid weights (${bad} bad), bind error ${err.toExponential(1)}`);
+  }
+  check(gear.gloves.geometry.morphAttributes.position?.length === 4, `gloves: 4 pose morph targets (${gear.gloves.geometry.morphAttributes.position?.length})`);
+
+  // Anchoring: every piece touches the body near its bone, or a piece of the same bone that does
+  const parentOf = Object.fromEntries(BONE_DEFS.map(d => [d.name, d.parent]));
+  const near = (a: string, b: string) => a === b || parentOf[a] === b || parentOf[b] === a;
+  const boneNames = BONE_DEFS.map(d => d.name);
+  const bodyGrid = new PointGrid(0.05);
+  const bg = body.geometry, bsi = bg.attributes.skinIndex, bsw = bg.attributes.skinWeight;
+  for (let i = 0; i < bg.attributes.position.count; i++) {
+    bodyGrid.add(new Vector3().fromBufferAttribute(bg.attributes.position, i), bsw.getX(i) >= bsw.getY(i) ? bsi.getX(i) : bsi.getY(i));
+  }
+  const pieces = gear.pieces;
+  const pieceGrid = new PointGrid(0.05);
+  const pts: Vector3[][] = pieces.map((pc: any, k: number) => {
+    const out: Vector3[] = [];
+    const step = Math.max(1, Math.floor(pc.chunk.vertexCount / 400));
+    for (let i = 0; i < pc.chunk.vertexCount; i += step) out.push(pc.chunk.point(i, new Vector3()));
+    out.forEach(q => pieceGrid.add(q, k));
+    return out;
+  });
+  const anchored = pieces.map((pc: any, k: number) => {
+    let d = Infinity;
+    for (const q of pts[k]) d = Math.min(d, bodyGrid.nearest(q, tag => near(boneNames[tag], pc.bone)));
+    return d < 0.035;
+  });
+  for (let changed = true; changed;) {
+    changed = false;
+    pieces.forEach((pc: any, k: number) => {
+      if (anchored[k]) return;
+      for (const q of pts[k]) {
+        if (pieceGrid.nearest(q, t => t !== k && anchored[t] && pieces[t].bone === pc.bone) < 0.02) { anchored[k] = changed = true; break; }
+      }
+    });
+  }
+  const floating = pieces.filter((_: any, k: number) => !anchored[k]).map((pc: any) => pc.name);
+  check(floating.length === 0, `${pieces.length} gear pieces anchored to their bones (floating: ${floating.join(', ') || 'none'})`);
+
+  // Bounds of the key parts
+  const boxOf = (re: RegExp) => pieces.filter((pc: any) => re.test(pc.name)).reduce((b: Box3, pc: any) => b.union(pc.chunk.bounds()), new Box3());
+  const helmetB = boxOf(/^helmet\./);
+  const hw = helmetB.max.x - helmetB.min.x, hd = helmetB.max.z - helmetB.min.z;
+  check(hw > 0.19 && hw < 0.23 && helmetB.max.y > 1.81 && helmetB.max.y < 1.85, `helmet ${hw.toFixed(3)} w x ${hd.toFixed(3)} d, top ${helmetB.max.y.toFixed(3)} (ref ~0.20 w, top ~1.825)`);
+  const collarPc = pieces.find((pc: any) => pc.name === 'collar');
+  let cw = 0;
+  for (let i = 0; i < collarPc.chunk.vertexCount; i++) { collarPc.chunk.point(i, v); if (Math.abs(v.y - 1.55) < 0.012) cw = Math.max(cw, Math.abs(v.x) * 2); }
+  check(cw > 0.29 && cw < 0.33, `collar width at 1.55 m: ${cw.toFixed(3)} (ref ~0.31)`);
+  for (const side of ['L', 'R']) {
+    const b = boxOf(new RegExp(`^boot\\..*\\.${side}$`));
+    const len = b.max.z - b.min.z;
+    check(len > 0.33 && len < 0.35 && Math.abs(b.min.y) < 0.002, `boot.${side}: length ${len.toFixed(3)} (ref 0.33-0.35), sole at y ${b.min.y.toFixed(3)}, top ${b.max.y.toFixed(3)}`);
+  }
+  for (const [name, b] of [['shoulder caps', boxOf(/^cap\./)], ['bracers', boxOf(/^(bracer|elbow)\./)], ['belt+pouches', boxOf(/^(belt|pouch)/)], ['knee pads', boxOf(/^knee\./)], ['gloves', boxOf(/^glove\./)]] as [string, Box3][]) {
+    console.log(`      ${name.padEnd(13)} x ${b.min.x.toFixed(3)}..${b.max.x.toFixed(3)}  y ${b.min.y.toFixed(3)}..${b.max.y.toFixed(3)}  z ${b.min.z.toFixed(3)}..${b.max.z.toFixed(3)}`);
+  }
+
+  // Body hidden under tubular gear: a ray from the limb axis through each body vertex must hit the gear beyond it
+  const hidden = (label: string, re: RegExp, sel: (q: Vector3, boneIdx: number) => Vector3 | null) => {
+    const targets = pieces.filter((pc: any) => re.test(pc.name)).map((pc: any) => new Mesh(chunkGeometry(pc.chunk), new MeshBasicMaterial({ side: DoubleSide })));
+    targets.forEach((m: Mesh) => m.updateMatrixWorld(true));
+    const ray = new Raycaster();
+    let total = 0, exposed = 0;
+    for (let i = 0; i < bg.attributes.position.count; i++) {
+      const q = new Vector3().fromBufferAttribute(bg.attributes.position, i);
+      const axis = sel(q, bsw.getX(i) >= bsw.getY(i) ? bsi.getX(i) : bsi.getY(i));
+      if (!axis) continue;
+      total++;
+      const dir = q.clone().sub(axis);
+      const dist = dir.length();
+      ray.set(axis, dir.normalize());
+      const hit = ray.intersectObjects(targets, false).find(h => h.distance > dist - 1e-4);
+      if (!hit) exposed++;
+    }
+    check(total > 0 && exposed / total < 0.02, `${label}: body covered ${total - exposed}/${total}`);
+  };
+  const isBone = (idx: number, re: RegExp) => re.test(boneNames[idx]);
+  hidden('boots over the calves', /^boot\./, (q, b) => (q.y > 0.175 && q.y < 0.495 && isBone(b, /^shin\./) ? new Vector3(Math.sign(q.x) * 0.1, q.y, 0) : null));
+  hidden('bracers + glove cuffs over the forearms', /^(bracer|glove)\./, (q, b) => {
+    if (q.y > 1.1 || q.y < 0.9 || !isBone(b, /^(forearm|hand)\./)) return null;
+    const s = sampleSection([...armSections(q.x > 0 ? 'L' : 'R')].sort((a, c) => a.y - c.y), q.y);
+    return new Vector3(s.cx, q.y, s.cz);
+  });
+  hidden('helmet + collar over the neck', /^(helmet|collar)/, q => (q.y > 1.535 && Math.abs(q.x) < 0.07 ? new Vector3(0, q.y, -0.01) : null));
+
+  // Hand poses: grip curls the fingertips toward the wrist, open-palm extends them
+  const tipReach = (side: string, inf: number[]) => {
+    gear.gloves.morphTargetInfluences.splice(0, 4, ...inf);
+    const w = bindPosition(`hand.${side}`);
+    const tips = gear.gloveTips[side].slice(0, 4).map((i: number) => gear.gloves.getVertexPosition(i, new Vector3()).distanceTo(w));
+    return tips.reduce((a: number, b: number) => a + b, 0) / tips.length;
+  };
+  for (const side of ['L', 'R']) {
+    const o = side === 'L' ? 0 : 2;
+    const relaxed = tipReach(side, [0, 0, 0, 0]);
+    const grip = tipReach(side, o ? [0, 0, 1, 0] : [1, 0, 0, 0]);
+    const open = tipReach(side, o ? [0, 0, 0, 1] : [0, 1, 0, 0]);
+    check(grip < relaxed - 0.03 && open > relaxed && Math.abs(open - HAND_LENGTH) < 0.03,
+      `glove.${side} fingertip reach from the wrist: grip ${grip.toFixed(3)} < relaxed ${relaxed.toFixed(3)} < open ${open.toFixed(3)} (hand ${HAND_LENGTH})`);
+  }
+  gear.gloves.morphTargetInfluences.fill(0);
+  check(gear.rivets.defs.length >= 30, `rivets: ${gear.rivets.defs.length} instances in 1 draw call`);
+
+  // Body adjustments: bare bideltoid width at 1.45 m in an A-pose like the reference, then with the caps
+  const widthAt = (meshes: any[], y: number) => {
+    let half = 0;
+    for (const m of meshes) for (let i = 0; i < m.geometry.attributes.position.count; i++) {
+      m.getVertexPosition(i, v);
+      if (Math.abs(v.y - y) < 0.006) half = Math.max(half, Math.abs(v.x));
+    }
+    return half * 2;
+  };
+  bone['upperarm.L'].rotation.z = 0.52;
+  bone['upperarm.R'].rotation.z = -0.52;
+  p.root.updateMatrixWorld(true);
+  const bare = widthAt([body], 1.45), capped = widthAt([body, gear.soft], 1.45);
+  check(bare > 0.43 && bare < 0.47, `A-pose shoulder width at 1.45 m, bare body: ${bare.toFixed(3)} (target 0.44-0.46)`);
+  check(capped > 0.48 && capped < 0.52, `A-pose shoulder width at 1.45 m with caps: ${capped.toFixed(3)} (ref ~0.50)`);
+  bone['upperarm.L'].rotation.z = 0;
+  bone['upperarm.R'].rotation.z = 0;
+  p.root.updateMatrixWorld(true);
+
+  // Seat: the trouser back falls straight from the hips to the thigh (no fold), hip depth kept
+  const back = (y: number) => {
+    // +-11 mm: wider than the 2 cm ring spacing of the leg lofts, so every height finds vertices
+    let z = Infinity, zf = -Infinity;
+    for (let i = 0; i < bg.attributes.position.count; i++) {
+      raw.fromBufferAttribute(bg.attributes.position, i);
+      if (Math.abs(raw.y - y) < 0.011 && Math.abs(raw.x) < 0.2) { z = Math.min(z, raw.z); zf = Math.max(zf, raw.z); }
+    }
+    return { z, depth: zf - z };
+  };
+  const yTop = 0.93, yBot = 0.7, zTop = back(yTop).z, zBot = back(yBot).z;
+  let fold = 0;
+  for (let y = yBot; y <= yTop; y += 0.01) fold = Math.max(fold, back(y).z - (zBot + ((zTop - zBot) * (y - yBot)) / (yTop - yBot)));
+  check(fold < 0.01, `seat falls straight: max fold ${fold.toFixed(4)} m inward of the hip-to-thigh line (back ${zTop.toFixed(3)} at ${yTop} m, ${zBot.toFixed(3)} at ${yBot} m)`);
+  const depths = [0.9, 0.95, 1.0].map(y => back(y).depth);
+  check(depths.every(d => d > 0.21 && d < 0.24), `hip depth kept: ${depths.map(d => d.toFixed(3)).join(' / ')} at 0.90 / 0.95 / 1.00 m`);
+}
+
+/** Rigid gear and rivets follow their bones in a pose (call after posing). */
+function gearFollows(p: any, label: string) {
+  const gear = p.model.gear;
+  p.root.updateMatrixWorld(true);
+  // Rivet i vs the nearest metal/soft vertex of its bone at bind: rigid, so the distance is unchanged
+  const pos = new Vector3(), q = new Vector3(), m = new Matrix4();
+  let worst = 0;
+  const meshes = [gear.metal, gear.soft];
+  gear.rivets.defs.forEach((def: any, i: number) => {
+    if (i % 4) return;
+    const bindP = new Vector3().setFromMatrixPosition(def.matrix);
+    let best = Infinity, bestMesh: any = null, bestIdx = -1;
+    for (const mesh of meshes) {
+      const g = mesh.geometry;
+      for (let k = 0; k < g.attributes.position.count; k++) {
+        if (g.attributes.skinIndex.getX(k) !== BONE_INDEX[def.bone]) continue;
+        const d = q.fromBufferAttribute(g.attributes.position, k).distanceTo(bindP);
+        if (d < best) { best = d; bestMesh = mesh; bestIdx = k; }
+      }
+    }
+    gear.rivets.mesh.getMatrixAt(i, m);
+    pos.setFromMatrixPosition(m);
+    bestMesh.getVertexPosition(bestIdx, q);
+    worst = Math.max(worst, Math.abs(pos.distanceTo(q) - best));
+  });
+  check(worst < 1e-4, `${label}: rivets follow their bones (max drift ${worst.toExponential(1)})`);
 }
 
 const poses: Record<string, Record<string, Vector3>> = {};
@@ -226,12 +444,17 @@ function bodyChecks(p: any) {
   };
 
   pose(idle, 1); stretch('idle'); armInTorso('idle'); handRoom('idle');
+  const inf = model.gear.gloves.morphTargetInfluences;
+  check(inf[0] > 0.95 && inf[2] < 0.05 && inf[3] < 0.05, `idle: weapon hand grips (${inf[0].toFixed(2)}), off hand relaxed`);
   pose({ ...idle, forward: true }, 1); armInTorso('walk');
   pose({ ...idle, aiming: true }, 1); stretch('aim');
   pose({ ...idle, forward: true }, 0.5); stretchCycle('walk cycle', { ...idle, forward: true }, 1.2);
   pose({ ...idle, forward: true, sprint: true }, 0.5); stretchCycle('sprint cycle', { ...idle, forward: true, sprint: true }, 1.2);
+  gearFollows(p, 'sprint');
   pose({ ...idle, strafeLeft: true, aiming: true }, 0.5); stretchCycle('aim strafe cycle', { ...idle, strafeLeft: true, aiming: true }, 1.2);
   p.isAiming = true; p.fireStasis(); pose({ ...idle, aiming: true }, 0.15); stretch('stasis');
+  check(inf[3] > 0.5, `stasis: off hand opens (${inf[3].toFixed(2)})`);
+  gearFollows(p, 'stasis');
   pose(idle, 1);
 }
 
@@ -251,6 +474,8 @@ for (const mode of ['legacy', 'new'] as const) {
   console.log(`      triangles ${s.tris}, meshes (draw calls) ${s.meshes}, materials ${s.mats}`);
   if (mode === 'new') {
     check(s.tris < 40000, `total triangles under 40k (${s.tris})`);
+    check(s.meshes <= 26, `draw calls ~25 (${s.meshes})`);
+    gearChecks(p);
     bodyChecks(p);
   }
 

@@ -1,6 +1,5 @@
 import {
   BoxGeometry,
-  CapsuleGeometry,
   CylinderGeometry,
   Group,
   Mesh,
@@ -8,8 +7,6 @@ import {
   MeshStandardMaterial,
   Object3D,
   Quaternion,
-  SphereGeometry,
-  TorusGeometry,
   Vector3,
   type BufferGeometry,
   type CanvasTexture,
@@ -26,6 +23,8 @@ import { PALETTE } from '../../graphics/Palette';
 import type { IsaacAnimState, IsaacView } from './IsaacView';
 import { bindPosition, buildSkeleton, resetToBind, sideSign, type BoneName, type IsaacBones, type Side } from './IsaacSkeleton';
 import { buildBody } from './IsaacBody';
+import { buildGear, type IsaacGear } from './IsaacGear';
+import { GLOVE_MORPHS } from './IsaacGloves';
 import { IsaacAnimator } from './IsaacAnimator';
 import { IsaacDebug } from './IsaacDebug';
 import {
@@ -52,13 +51,15 @@ export interface IsaacModelOptions {
 
 /**
  * Isaac's visual model (Proposal 005): skeleton + skinned fabric body + gear + tech.
- * Phase 2: the body is the real skinned mesh; helmet, gloves, boots, belt, caps and
- * the Plasma Cutter are still provisional primitives attached to bones (phases 3 and 5).
+ * Phase 3: the gear (helmet, collar, yoke, caps, bracers, gloves, belt, knee pads,
+ * pockets, boots) is rigid-skinned and merged per material; the RIG segments, stasis
+ * gauge and the Plasma Cutter are still provisional (phase 5).
  */
 export class IsaacModel implements IsaacView {
   readonly root = new Group();
   readonly bones: IsaacBones;
   readonly body: SkinnedMesh;
+  readonly gear: IsaacGear;
   readonly armL: Object3D;
   readonly weaponGroup = new Group();
   readonly rigSegments: Mesh<BufferGeometry, MeshBasicMaterial>[] = [];
@@ -80,17 +81,16 @@ export class IsaacModel implements IsaacView {
   private readonly qRoot = new Quaternion();
   private readonly qHand = new Quaternion();
   private currentOpacity = 1;
+  /** Current hand pose blend per side (0..1), damped toward the targets. */
+  private readonly hands = { L: { grip: 0, open: 0 }, R: { grip: 0, open: 0 } };
 
+  // Provisional tech hardware (stasis gauge) and Plasma Cutter (phase 5)
   private readonly mats = {
-    panel: new MeshStandardMaterial({ color: PALETTE.suit.panel, roughness: 0.7, metalness: 0 }),
-    strap: new MeshStandardMaterial({ color: PALETTE.suit.strap, roughness: 0.75, metalness: 0 }),
-    copper: new MeshStandardMaterial({ color: PALETTE.suit.copper, roughness: 0.6, metalness: 0.4 }),
     copperDark: new MeshStandardMaterial({ color: PALETTE.suit.copperDark, roughness: 0.65, metalness: 0.4 }),
     brass: new MeshStandardMaterial({ color: PALETTE.suit.brass, roughness: 0.55, metalness: 0.4 }),
     paint: new MeshStandardMaterial({ color: PALETTE.weapon.paint, roughness: 0.6, metalness: 0.2 }),
     gunmetal: new MeshStandardMaterial({ color: PALETTE.weapon.gunmetal, roughness: 0.5, metalness: 0.35 }),
-    grip: new MeshStandardMaterial({ color: PALETTE.weapon.grip, roughness: 0.8, metalness: 0 }),
-    visor: new MeshBasicMaterial({ color: PALETTE.rig.ok })
+    grip: new MeshStandardMaterial({ color: PALETTE.weapon.grip, roughness: 0.8, metalness: 0 })
   };
 
   constructor(parent: Object3D, ammo: number, maxAmmo: number, opts: IsaacModelOptions = {}) {
@@ -100,39 +100,19 @@ export class IsaacModel implements IsaacView {
     const ws = sideSign(W);
     const m = this.mats;
 
-    // ── Skeleton + skinned body (bound in the bind pose) ──
+    // ── Skeleton, skinned body and rigid-skinned gear (all bound in the bind pose) ──
     this.bones = buildSkeleton();
     this.root.add(this.bones.root);
     this.body = buildBody();
-    this.root.add(this.body);
+    this.gear = buildGear(W);
+    const skinned = [this.body, this.gear.metal, this.gear.soft, this.gear.visor, this.gear.gloves];
+    for (const mesh of skinned) this.root.add(mesh);
+    this.root.add(this.gear.rivets.mesh);
     this.root.updateMatrixWorld(true);
-    this.body.bind(this.bones.skeleton);
+    for (const mesh of skinned) mesh.bind(this.bones.skeleton);
+    this.gear.rivets.update(this.bones);
 
-    // ── Provisional gear on bones (phase 3 replaces it) ──
-    // Helmet: 0.215 w x 0.25 h x 0.255 d, top at 1.825
-    this.attach('head', new SphereGeometry(0.125, 28, 18), m.copper, [0, 1.7, 0.008], [0.86, 1, 1.02]);
-    for (let i = 0; i < 3; i++) {
-      this.attach('head', new BoxGeometry(0.1, 0.016, 0.03), m.visor, [0, 1.725 - i * 0.028, 0.128]);
-    }
-    this.attach('neck', new TorusGeometry(0.072, 0.02, 8, 28), m.copperDark, [0, 1.548, -0.014], [1, 1, 1], [Math.PI / 2, 0, 0]); // collar at the neck base
-    this.attach('spine2', new BoxGeometry(0.15, 0.07, 0.03), m.copper, [0, 1.36, 0.152]); // chest yoke
-    this.attach('hips', new TorusGeometry(0.155, 0.024, 8, 36), m.strap, [0, 1.04, -0.005], [1.1, 0.7, 1], [Math.PI / 2, 0, 0]); // belt
-    this.attach('hips', new BoxGeometry(0.07, 0.045, 0.02), m.brass, [0, 1.04, 0.112]); // buckle
-
-    for (const side of ['L', 'R'] as Side[]) {
-      const x = sideSign(side);
-      this.attach(`upperarm.${side}`, new SphereGeometry(0.072, 16, 10), m.panel, [x * 0.205, 1.462, -0.01], [1.2, 0.9, 1.1]); // shoulder cap
-      this.attach(`forearm.${side}`, new CylinderGeometry(0.062, 0.055, 0.15, 16), m.copper, [x * 0.2, 1.01, -0.012]); // bracer
-      this.attach(`hand.${side}`, new CapsuleGeometry(0.04, 0.07, 4, 10), m.panel, [x * 0.2, 0.84, -0.01], [0.75, 1, 1.15]); // glove
-      this.attach(`shin.${side}`, new SphereGeometry(0.06, 14, 10), m.panel, [x * 0.1, 0.555, 0.075], [1.05, 1.15, 0.6]); // knee pad
-      this.attach(`shin.${side}`, new CylinderGeometry(0.088, 0.079, 0.4, 18), m.copper, [x * 0.1, 0.32, -0.002]); // boot shaft
-      this.attach(`foot.${side}`, new CapsuleGeometry(0.062, 0.19, 4, 12), m.copperDark, [x * 0.1, 0.06, 0.05], [1.1, 0.9, 1], [Math.PI / 2, 0, 0]);
-      this.attach(`foot.${side}`, new BoxGeometry(0.13, 0.03, 0.3), m.panel, [x * 0.1, 0.015, 0.045]); // sole
-    }
-
-    // ── RIG spine: housing, 6 segments (bottom 3 on spine1, top 3 on spine2), pack ──
-    this.attach('spine2', new BoxGeometry(0.085, 0.42, 0.025), m.copperDark, [0, 1.27, -0.12]);
-    this.attach('spine2', new BoxGeometry(0.1, 0.08, 0.06), m.copperDark, [0, 1.475, -0.115]);
+    // ── RIG spine: 6 segments (bottom 3 on spine1, top 3 on spine2); housing and pack are gear ──
     const segH = 0.05;
     const segGap = 0.016;
     for (let i = 0; i < 6; i++) {
@@ -141,8 +121,7 @@ export class IsaacModel implements IsaacView {
     }
     this.rigBackLight = buildRigBackLight(this.bones.bone.spine2, this.toBone('spine2', [0, 1.25, -0.3]));
 
-    // Stasis socket on the weapon-side shoulder blade
-    this.attach('spine2', new BoxGeometry(0.13, 0.15, 0.04), m.copperDark, [ws * 0.12, 1.38, -0.125]);
+    // Stasis socket on the weapon-side shoulder blade (its plate is gear)
     const gauge = buildStasisGauge(this.bones.bone.spine2, this.toBone('spine2', [ws * 0.12, 1.38, -0.15]), m.copperDark, m.brass);
     this.stasisSegmentMats = gauge.mats;
     this.stasisLight = gauge.light;
@@ -217,8 +196,31 @@ export class IsaacModel implements IsaacView {
   update(dt: number, s: IsaacAnimState): void {
     if (this.debug?.bindPose) resetToBind(this.bones);
     else this.animator.update(dt, s);
+    this.updateHands(dt, s);
+    this.gear.rivets.update(this.bones);
     this.debug?.update(dt);
     this.alignWeapon();
+  }
+
+  /**
+   * Hand poses as morph weights: the weapon hand always grips; the off hand opens for
+   * the stasis thrust, half-closes while aiming (support) and otherwise relaxes.
+   */
+  private updateHands(dt: number, s: IsaacAnimState): void {
+    const W = WEAPON_SIDE, OFF: Side = W === 'L' ? 'R' : 'L';
+    const k = 1 - Math.exp(-12 * dt);
+    const target = {
+      [W]: { grip: 1, open: 0 },
+      [OFF]: s.stasisT > 0 ? { grip: 0, open: 1 } : { grip: s.aiming ? 0.45 : 0, open: 0 }
+    } as Record<Side, { grip: number; open: number }>;
+    const inf = this.gear.gloves.morphTargetInfluences;
+    for (const side of ['L', 'R'] as Side[]) {
+      const h = this.hands[side];
+      h.grip += (target[side].grip - h.grip) * k;
+      h.open += (target[side].open - h.open) * k;
+      inf[GLOVE_MORPHS.indexOf(`grip.${side}`)] = h.grip;
+      inf[GLOVE_MORPHS.indexOf(`open.${side}`)] = h.open;
+    }
   }
 
   /** Keeps the weapon level along the model's +Z whatever the arm pose, so the laser and beam stay true. */

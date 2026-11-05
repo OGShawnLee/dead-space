@@ -19,7 +19,7 @@ const STANCE = {
   knee: 0.1,
   ankle: -0.05,
   offShoulderForward: -0.14,
-  offAbduction: 0.15,
+  offAbduction: 0.24,
   offElbow: -0.3,
   offForearmIn: 0.15
 } as const;
@@ -95,7 +95,7 @@ export class IsaacAnimator {
     const shoulderX = s.aiming ? -1.5 : -0.45 + swing * amp * 0.12;
     wu.rotation.x = damp(wu.rotation.x, shoulderX - s.reloadT * 0.4, R, dt);
     // Aim: +0.09 cancels the forward-rolled clavicle so the extended arm stays beside the body
-    wu.rotation.z = damp(wu.rotation.z, W * (s.aiming ? 0.09 : 0.14), R, dt);
+    wu.rotation.z = damp(wu.rotation.z, W * (s.aiming ? 0.09 : 0.22), R, dt);
     wf.rotation.x = damp(wf.rotation.x, s.aiming ? -0.07 : -1.1, R, dt);
 
     // Off arm (stasis): thrust, aim support, or relaxed with the hand in front of the thigh

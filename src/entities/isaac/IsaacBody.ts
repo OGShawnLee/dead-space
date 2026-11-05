@@ -237,21 +237,21 @@ const angDist = (a: number, b: number) => Math.abs(Math.atan2(Math.sin(a - b), M
 
 /** Torso control sections (crotch to neck), ascending y. Exported for the numeric checks. */
 export const TORSO_SECTIONS: Section[] = [
-  { y: 0.795, rx: 0.1, zf: 0.06, zb: 0.075, n: 2.2, cz: -0.005 },
-  { y: 0.83, rx: 0.16, zf: 0.088, zb: 0.108, n: 2.4, cz: -0.008 },
+  { y: 0.795, rx: 0.1, zf: 0.06, zb: 0.104, n: 2.2, cz: -0.006 },
+  { y: 0.83, rx: 0.16, zf: 0.088, zb: 0.114, n: 2.4, cz: -0.008 },
   { y: 0.9, rx: 0.19, zf: 0.102, zb: 0.126, n: 2.5, cz: -0.01 }, // hips
   { y: 0.96, rx: 0.186, zf: 0.104, zb: 0.12, n: 2.5, cz: -0.01 },
   { y: 1.02, rx: 0.168, zf: 0.103, zb: 0.108, n: 2.5, cz: -0.008 },
   { y: 1.08, rx: 0.152, zf: 0.1, zb: 0.1, n: 2.5, cz: -0.005 }, // waist
   { y: 1.13, rx: 0.149, zf: 0.104, zb: 0.098, n: 2.5, cz: -0.004 },
-  { y: 1.2, rx: 0.158, zf: 0.122, zb: 0.104, n: 2.6, cz: -0.003 },
-  { y: 1.27, rx: 0.17, zf: 0.14, zb: 0.114, n: 2.6, cz: -0.002 },
-  { y: 1.33, rx: 0.186, zf: 0.15, zb: 0.12, n: 2.7, cz: -0.004 }, // chest
-  { y: 1.38, rx: 0.19, zf: 0.145, zb: 0.12, n: 2.8, cz: -0.006 },
-  { y: 1.425, rx: 0.195, zf: 0.128, zb: 0.114, n: 2.8, cz: -0.01 },
-  { y: 1.455, rx: 0.198, zf: 0.11, zb: 0.104, n: 2.7, cz: -0.012 }, // shoulder line
-  { y: 1.48, rx: 0.172, zf: 0.093, zb: 0.094, n: 2.5, cz: -0.014 },
-  { y: 1.505, rx: 0.122, zf: 0.076, zb: 0.08, n: 2.3, cz: -0.016 }, // trapezius
+  { y: 1.2, rx: 0.152, zf: 0.122, zb: 0.104, n: 2.6, cz: -0.003 },
+  { y: 1.27, rx: 0.155, zf: 0.14, zb: 0.114, n: 2.6, cz: -0.002 },
+  { y: 1.33, rx: 0.166, zf: 0.15, zb: 0.12, n: 2.7, cz: -0.004 }, // chest
+  { y: 1.38, rx: 0.166, zf: 0.145, zb: 0.12, n: 2.8, cz: -0.006 },
+  { y: 1.425, rx: 0.16, zf: 0.128, zb: 0.114, n: 2.8, cz: -0.01 },
+  { y: 1.455, rx: 0.15, zf: 0.11, zb: 0.104, n: 2.7, cz: -0.012 }, // shoulder line
+  { y: 1.48, rx: 0.128, zf: 0.093, zb: 0.094, n: 2.5, cz: -0.014 },
+  { y: 1.505, rx: 0.1, zf: 0.076, zb: 0.08, n: 2.3, cz: -0.016 }, // trapezius
   { y: 1.528, rx: 0.072, zf: 0.06, zb: 0.065, n: 2.1, cz: -0.016 }, // neck base
   { y: 1.555, rx: 0.056, zf: 0.052, zb: 0.054, n: 2, cz: -0.014 },
   { y: 1.6, rx: 0.053, zf: 0.05, zb: 0.05, n: 2, cz: -0.008 },
@@ -283,7 +283,7 @@ function torso(builder: BodyBuilder): void {
       if (y > 1.525) return S.panel; // neck seal
       if (y < 1.01) return S.fabricDark; // trousers
       if (y < 1.07) return S.strap; // belt band (provisional belt sits on it)
-      if (y > 1.42 && Math.abs(p.x) > 0.12) return S.panel; // shoulder yoke
+      if (y > 1.42 && Math.abs(p.x) > 0.1) return S.panel; // shoulder yoke
       if (y < 1.37 && Math.abs(Math.cos(theta)) > 0.88) return S.panel; // side panels under the arms
       if (y > 1.08 && y < 1.36 && p.x < -0.055 && p.x > -0.135 && Math.sin(theta) > 0.4) return S.panel; // padded chest panel
       return S.fabric;
@@ -293,7 +293,7 @@ function torso(builder: BodyBuilder): void {
       // Neck blend starts above the clavicle zone so no vertex needs 3 bones
       const w = chainWeights(y, ['head', 'neck', 'spine2', 'spine1', 'hips'], [1.6, 1.525, 1.27, 1.1], [0.02, 0.025, 0.07, 0.06]);
       // Shoulder tops follow the clavicles (fading out up the trapezius, below the neck blend)
-      const clav = blend(Math.abs(p.x), 0.1, 0.17) * blend(y, 1.38, 1.44) * (1 - blend(y, 1.47, 1.5));
+      const clav = blend(Math.abs(p.x), 0.08, 0.14) * blend(y, 1.38, 1.44) * (1 - blend(y, 1.47, 1.5));
       if (clav > 0) {
         w.forEach(e => (e[1] *= 1 - clav));
         w.push([p.x > 0 ? 'clavicle.L' : 'clavicle.R', clav]);
@@ -309,26 +309,32 @@ function torso(builder: BodyBuilder): void {
   });
 }
 
-function leg(builder: BodyBuilder, side: Side): void {
-  const sg = sideSign(side);
+/** Trouser leg control sections (ascending y), centered on the hip joint. Exported for the gear fit. */
+export function legSections(side: Side): Section[] {
   const hip = bindPosition(`thigh.${side}`);
   const L = (y: number, rx: number, zf: number, zb: number, n = 2.1): Section => ({ y, rx, zf, zb, n, cx: hip.x, cz: hip.z });
+  return [
+    L(0.13, 0.044, 0.046, 0.046),
+    L(0.22, 0.05, 0.052, 0.054),
+    L(0.33, 0.06, 0.06, 0.068),
+    L(0.42, 0.067, 0.066, 0.078), // calf
+    L(0.49, 0.066, 0.07, 0.072),
+    L(0.535, 0.069, 0.072, 0.066), // knee
+    L(0.585, 0.074, 0.078, 0.072),
+    // The seat falls straight from the buttocks to the thigh (no fold under the torso)
+    L(0.64, 0.084, 0.082, 0.081),
+    L(0.72, 0.092, 0.09, 0.097),
+    L(0.8, 0.097, 0.094, 0.114),
+    L(0.88, 0.098, 0.095, 0.124),
+    L(0.95, 0.092, 0.09, 0.112),
+    L(0.99, 0.07, 0.075, 0.08)
+  ];
+}
+
+function leg(builder: BodyBuilder, side: Side): void {
+  const sg = sideSign(side);
   builder.loft({
-    sections: [
-      L(0.99, 0.07, 0.075, 0.08),
-      L(0.95, 0.092, 0.09, 0.098),
-      L(0.88, 0.098, 0.095, 0.1),
-      L(0.8, 0.097, 0.094, 0.095),
-      L(0.72, 0.092, 0.09, 0.088),
-      L(0.64, 0.084, 0.082, 0.078),
-      L(0.585, 0.074, 0.078, 0.07),
-      L(0.535, 0.069, 0.072, 0.066), // knee
-      L(0.49, 0.066, 0.07, 0.072),
-      L(0.42, 0.067, 0.066, 0.078), // calf
-      L(0.33, 0.06, 0.06, 0.068),
-      L(0.22, 0.05, 0.052, 0.054),
-      L(0.13, 0.044, 0.046, 0.046)
-    ],
+    sections: legSections(side),
     step: 0.02,
     angles: angleList(22, side === 'L' ? Math.PI : 0), // seam on the inner side
     capTop: 0.04,
@@ -348,23 +354,30 @@ function leg(builder: BodyBuilder, side: Side): void {
   });
 }
 
-function arm(builder: BodyBuilder, side: Side): void {
+/** Sleeve control sections (ascending y), centered on the shoulder joint. Exported for the gear fit. */
+export function armSections(side: Side): Section[] {
   const sh = bindPosition(`upperarm.${side}`);
-  const A = (y: number, rx: number, zf: number, zb: number, n = 2.1): Section => ({ y, rx, zf, zb, n, cx: sh.x, cz: sh.z });
+  const sg = sideSign(side);
+  // `dx` moves the ring toward the body: the deltoid sits over the joint, not beside it
+  const A = (y: number, rx: number, zf: number, zb: number, dx = 0, n = 2.1): Section => ({ y, rx, zf, zb, n, cx: sh.x - sg * dx, cz: sh.z });
+  return [
+    A(0.925, 0.037, 0.032, 0.032), // wrist
+    A(1.0, 0.045, 0.042, 0.04),
+    A(1.07, 0.055, 0.053, 0.05), // forearm
+    A(1.13, 0.055, 0.055, 0.054),
+    A(1.165, 0.05, 0.05, 0.056), // elbow
+    A(1.2, 0.051, 0.052, 0.055),
+    A(1.27, 0.055, 0.058, 0.055),
+    A(1.34, 0.059, 0.066, 0.058), // biceps
+    A(1.4, 0.06, 0.064, 0.06, 0.006),
+    A(1.445, 0.058, 0.063, 0.062, 0.012), // deltoid
+    A(1.475, 0.05, 0.053, 0.053, 0.014)
+  ];
+}
+
+function arm(builder: BodyBuilder, side: Side): void {
   builder.loft({
-    sections: [
-      A(1.475, 0.055, 0.055, 0.055),
-      A(1.445, 0.068, 0.066, 0.064), // deltoid
-      A(1.4, 0.068, 0.066, 0.062),
-      A(1.34, 0.064, 0.068, 0.058), // biceps
-      A(1.27, 0.057, 0.058, 0.055),
-      A(1.2, 0.052, 0.052, 0.055),
-      A(1.165, 0.05, 0.05, 0.056), // elbow
-      A(1.13, 0.055, 0.055, 0.054),
-      A(1.07, 0.055, 0.053, 0.05), // forearm
-      A(1.0, 0.045, 0.042, 0.04),
-      A(0.925, 0.037, 0.032, 0.032) // wrist
-    ],
+    sections: armSections(side),
     step: 0.018,
     angles: angleList(20, side === 'L' ? Math.PI : 0),
     capTop: 0.035,

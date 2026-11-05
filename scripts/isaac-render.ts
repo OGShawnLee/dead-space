@@ -2,10 +2,11 @@
 // Software-rasterizes the new model (skinned body + rigid parts) into orthographic
 // front / side / back views with flat Lambert shading and a 10 cm grid, so the model
 // can be reviewed without a browser.
-// Usage: bun scripts/isaac-render.ts <out.png> [idle|aim|walk|bind] [pixelsPerMeter]
+// Usage: bun scripts/isaac-render.ts <out.png> [idle|aim|walk|stasis|bind] [pixelsPerMeter] [y0:y1]
+// The optional y0:y1 (meters) crops the views to a height band for close-ups (e.g. 1.4:1.86 for the helmet).
 import { writeFileSync } from 'node:fs';
 import { deflateSync } from 'node:zlib';
-import { Color, Matrix3, Scene, Vector3, type BufferGeometry, type Material, type Mesh, type SkinnedMesh } from 'three';
+import { Color, Matrix3, Matrix4, Scene, Vector3, type BufferGeometry, type InstancedMesh, type Material, type Mesh, type SkinnedMesh } from 'three';
 
 const ctx2d: any = new Proxy({}, { get: (t: any, k) => (k in t ? t[k] : () => ({})), set: (t: any, k, v) => ((t[k] = v), true) });
 (globalThis as any).document = { createElement: () => ({ width: 0, height: 0, getContext: () => ctx2d }), getElementById: () => null };
@@ -14,8 +15,9 @@ const ctx2d: any = new Proxy({}, { get: (t: any, k) => (k in t ? t[k] : () => ({
 const { Player } = await import('../src/entities/Player');
 const { resetToBind } = await import('../src/entities/isaac/IsaacSkeleton');
 
-const [out = 'isaac.png', poseName = 'idle', ppmArg = '300'] = process.argv.slice(2);
+const [out = 'isaac.png', poseName = 'idle', ppmArg = '300', cropArg = ''] = process.argv.slice(2);
 const PPM = Number(ppmArg);
+const [Y0, Y1] = cropArg ? cropArg.split(':').map(Number) : [-0.05, 1.95];
 
 // ── Build and pose ──
 const player = new Player(new Scene(), new Proxy({}, { get: () => () => {} }) as any, new Vector3());
@@ -23,7 +25,12 @@ const model = player.model as any;
 const input = { forward: false, backward: false, strafeLeft: false, strafeRight: false, sprint: false, aiming: false } as any;
 if (poseName === 'aim') input.aiming = true;
 if (poseName === 'walk') input.forward = true;
-if (poseName !== 'bind') for (let t = 0; t < 1.3; t += 1 / 60) { player.update(1 / 60, input, []); player.root.position.set(0, 0, 0); }
+if (poseName === 'stasis') { input.aiming = true; player.isAiming = true; }
+if (poseName !== 'bind') for (let t = 0; t < 1.3; t += 1 / 60) {
+  if (poseName === 'stasis' && t > 1.1 && player.stasisAnimTimer <= 0) player.fireStasis();
+  player.update(1 / 60, input, []);
+  player.root.position.set(0, 0, 0);
+}
 else resetToBind(model.bones);
 player.root.updateMatrixWorld(true);
 
@@ -39,19 +46,28 @@ model.root.traverse((o: any) => {
   const pos = g.attributes.position;
   const col = mat.vertexColors ? g.attributes.color : null;
   const skinned = (mesh as SkinnedMesh).isSkinnedMesh;
-  const world: Vector3[] = [];
-  for (let i = 0; i < pos.count; i++) {
-    const v = new Vector3();
-    if (skinned) (mesh as SkinnedMesh).getVertexPosition(i, v);
-    else v.fromBufferAttribute(pos, i);
-    world.push(v.applyMatrix4(mesh.matrixWorld));
-  }
-  const colorOf = (i: number) => (col ? new Color(col.getX(i), col.getY(i), col.getZ(i)) : (mat.color ?? new Color(1, 0, 1)).clone());
-  const idx = g.index;
-  const n = idx ? idx.count : pos.count;
-  for (let t = 0; t < n; t += 3) {
-    const ids = [0, 1, 2].map(k => (idx ? idx.getX(t + k) : t + k));
-    tris.push({ p: ids.map(i => world[i]), c: ids.map(colorOf) });
+  const instanced = mesh as unknown as InstancedMesh;
+  const instances = instanced.isInstancedMesh ? instanced.count : 1;
+  const im = new Matrix4();
+  for (let inst = 0; inst < instances; inst++) {
+    const toWorld = instanced.isInstancedMesh ? (instanced.getMatrixAt(inst, im), im.premultiply(mesh.matrixWorld)) : mesh.matrixWorld;
+    const world: Vector3[] = [];
+    for (let i = 0; i < pos.count; i++) {
+      const v = new Vector3();
+      if (skinned) (mesh as SkinnedMesh).getVertexPosition(i, v);
+      else v.fromBufferAttribute(pos, i);
+      world.push(v.applyMatrix4(toWorld));
+    }
+    const colorOf = (i: number) => {
+      const c = col ? new Color(col.getX(i), col.getY(i), col.getZ(i)) : new Color(1, 1, 1);
+      return mat.color ? c.multiply(mat.color) : c;
+    };
+    const idx = g.index;
+    const n = idx ? idx.count : pos.count;
+    for (let t = 0; t < n; t += 3) {
+      const ids = [0, 1, 2].map(k => (idx ? idx.getX(t + k) : t + k));
+      tris.push({ p: ids.map(i => world[i]), c: ids.map(colorOf) });
+    }
   }
 });
 
@@ -61,13 +77,13 @@ const views: { name: string; sx: (v: Vector3) => number; depth: (v: Vector3) => 
   { name: 'side', sx: v => -v.z, depth: v => v.x },
   { name: 'back', sx: v => -v.x, depth: v => -v.z }
 ];
-const VW = Math.round(0.9 * PPM), VH = Math.round(2.0 * PPM);
+const VW = Math.round(Math.min(0.9, Math.max(0.5, (Y1 - Y0) * 1.2)) * PPM), VH = Math.round((Y1 - Y0) * PPM);
 const W = VW * views.length, H = VH;
 const rgb = new Float32Array(W * H * 3);
 const zbuf = new Float32Array(W * H).fill(-Infinity);
 
 // Background + 10 cm grid (brighter every 50 cm), floor at the bottom margin
-const floorPx = H - Math.round(0.05 * PPM);
+const floorPx = H + Math.round(Y0 * PPM);
 for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
   const hM = (floorPx - y) / PPM;
   const onLine = Math.abs(hM * 10 - Math.round(hM * 10)) * PPM < 0.05 * 10 && hM >= 0;

@@ -31,6 +31,12 @@ export interface BoneDef {
   pos: [number, number, number];
 }
 
+/**
+ * Shoulder joint X. Bideltoid width of the bare body is ~0.45 m (A-pose, 1.45 m) so that
+ * with the shoulder caps it matches the reference (~0.50 m).
+ */
+export const SHOULDER_X = 0.165;
+
 /** Center-line and left-side bones; right side is mirrored on X. */
 const CENTER: BoneDef[] = [
   { name: 'hips', parent: null, pos: [0, 0.98, 0] },
@@ -42,11 +48,11 @@ const CENTER: BoneDef[] = [
 
 const LEFT: { name: LimbBone; parent: BoneName | LimbBone; pos: [number, number, number] }[] = [
   { name: 'clavicle', parent: 'spine2', pos: [0.035, 1.445, 0] },
-  { name: 'upperarm', parent: 'clavicle', pos: [0.2, 1.455, -0.01] },
+  { name: 'upperarm', parent: 'clavicle', pos: [SHOULDER_X, 1.455, -0.01] },
   // Elbow and knee axes sit off the limb center (olecranon behind, patella in front),
   // which keeps the stretched side of the bend short
-  { name: 'forearm', parent: 'upperarm', pos: [0.2, 1.165, -0.035] },
-  { name: 'hand', parent: 'forearm', pos: [0.2, 0.905, -0.01] },
+  { name: 'forearm', parent: 'upperarm', pos: [SHOULDER_X, 1.165, -0.035] },
+  { name: 'hand', parent: 'forearm', pos: [SHOULDER_X, 0.905, -0.01] },
   { name: 'thigh', parent: 'hips', pos: [0.1, 0.93, 0] },
   { name: 'shin', parent: 'thigh', pos: [0.1, 0.535, 0.025] },
   { name: 'foot', parent: 'shin', pos: [0.1, 0.1, -0.005] },
