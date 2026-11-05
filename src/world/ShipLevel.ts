@@ -15,6 +15,7 @@ import {
 } from 'three';
 import { TextureFactory } from '../graphics/TextureFactory';
 import { PALETTE } from '../graphics/Palette';
+import { PropPlacer, mulberry32 } from './props/PropPlacer';
 import type { PickupItem, EscapeZone } from '../types';
 import type { ItemId } from '../inventory/ItemDefs';
 import { getTheme, type AreaTheme, type LightKind, type SurfaceDef, type ThemeId } from './AreaTheme';
@@ -44,30 +45,36 @@ export class ShipLevel {
   playerStart = new Vector3(0, 0, 0);
 
   matWall!: MeshStandardMaterial;
-  matFloor!: MeshStandardMaterial;
+  matFloors: Array<{ share: number; mat: MeshStandardMaterial }> = [];
   matCeiling!: MeshStandardMaterial;
   matEscape!: MeshStandardMaterial;
 
   theme: AreaTheme;
+  seed: number;
+  props = new PropPlacer();
 
-  constructor(public scene: Scene, themeId: ThemeId = 'ishimura-default') {
+  constructor(public scene: Scene, themeId: ThemeId = 'ishimura-default', seed = Math.floor(Math.random() * 2 ** 32)) {
+    this.seed = seed;
     this.theme = getTheme(themeId);
     this.initMaterials();
     this.buildLevel();
   }
 
   private makeSurface(def: SurfaceDef): MeshStandardMaterial {
+    const { map, normalMap, roughnessMap } = TextureFactory.surfaceMaps(def.texture, def.relief);
     return new MeshStandardMaterial({
-      map: TextureFactory.surface(def.texture),
+      map,
+      normalMap,
+      roughnessMap,
       roughness: def.roughness,
       metalness: def.metalness
     });
   }
 
   initMaterials(): void {
-    const { wall, floor, ceiling } = this.theme.surfaces;
+    const { wall, floors, ceiling } = this.theme.surfaces;
     this.matWall = this.makeSurface(wall);
-    this.matFloor = this.makeSurface(floor);
+    this.matFloors = floors.map(f => ({ share: f.share, mat: this.makeSurface(f.surface) }));
     this.matCeiling = this.makeSurface(ceiling);
     this.matEscape = new MeshStandardMaterial({
       color: PALETTE.green.mid,
@@ -120,6 +127,7 @@ export class ShipLevel {
     carveRoom(N - 4, N - 4, 3, 3, 3); // Escape room (val = 3)
 
     const wallGeo = new BoxGeometry(this.cellSize, this.wallHeight, this.cellSize);
+    const layoutRng = mulberry32(this.seed ^ 0x9e3779b9);
     const floorGeo = new PlaneGeometry(this.cellSize, this.cellSize);
     const ceilingGeo = new PlaneGeometry(this.cellSize, this.cellSize);
     const halfW = (N * this.cellSize) / 2;
@@ -145,8 +153,9 @@ export class ShipLevel {
           this.scene.add(wallMesh);
           this.colliders.push(new Box3().setFromObject(wallMesh));
         } else {
-          const floorMesh = new Mesh(floorGeo, this.matFloor);
-          floorMesh.rotation.x = -Math.PI / 2;
+          const floorMesh = new Mesh(floorGeo, this.pickFloorMaterial(layoutRng));
+          // Random in-plane quarter turn breaks up the repetition.
+          floorMesh.rotation.set(-Math.PI / 2, 0, Math.floor(layoutRng() * 4) * (Math.PI / 2));
           floorMesh.position.set(wx, 0, wz);
           floorMesh.receiveShadow = true;
           this.scene.add(floorMesh);
@@ -185,6 +194,25 @@ export class ShipLevel {
         }
       }
     }
+
+    this.props.build(this.scene, this.theme.props, {
+      grid, cellSize: this.cellSize, wallHeight: this.wallHeight, halfW, rng: mulberry32(this.seed)
+    });
+    this.colliders.push(...this.props.colliders);
+  }
+
+  dispose(): void {
+    this.props.dispose(this.scene);
+  }
+
+  private pickFloorMaterial(rng: () => number): MeshStandardMaterial {
+    const total = this.matFloors.reduce((sum, f) => sum + f.share, 0);
+    let r = rng() * total;
+    for (const f of this.matFloors) {
+      r -= f.share;
+      if (r <= 0) return f.mat;
+    }
+    return this.matFloors[this.matFloors.length - 1].mat;
   }
 
   private pickLightKind(): LightKind {

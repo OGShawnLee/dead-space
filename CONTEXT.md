@@ -82,6 +82,8 @@ dead-space/
     │   └── Leaper.ts           # Leaper: stalk/windup/lunge, tail blade
     ├── world/
     │   ├── AreaTheme.ts        # data-only area looks: THEMES['ishimura-default'] (atmosphere, surfaces, light mix); getTheme()
+    │   ├── props/PropDefs.ts   # PROPS registry (pipe, trim, vent, conduit, crate): geometry/material factories + placement rule
+    │   ├── props/PropPlacer.ts # seeded placement, one InstancedMesh per prop type, crate colliders, dispose()
     │   ├── ShipLevel.ts        # grid labyrinth generator (takes a theme), colliders, corridor lights, escape chamber, pickups
     │   ├── LineOfSight.ts      # checkLineOfSight(): ray vs collider boxes (AI cannot see through walls)
     │   └── GibPart.ts          # kinematic debris for severed limbs
@@ -165,7 +167,17 @@ Families: `metal` (void, m900…m300 ramp), `ambient`, `rust` (bronze, rust, gre
 **Saturation rule (owner feedback: the world was too saturated and clashed with the desaturated menus):** `core` = saturated, only for small emissives and Isaac's own tech (RIG, visor, stasis, laser, ammo hologram); `mid` = world surfaces and objects (pickups, escape room, beacon, hazard stripes); `dim` = matches the holographic menus. Tune `mid` values in `Palette.ts` if something looks too dull or too loud.
 
 ### Look (current)
-Practical lights carry the color (red `red.core` always flickering, cold white `light.corridor`); heavy darkness (fog `metal.void` @0.08). Walls/floor/ceiling are `MeshStandardMaterial` with a single canvas color map (grays unified into the `metal` ramp), `metalness` 0.65–0.9 and **no environment map**, which renders them nearly black/flat (relief is step 2 of Proposal 004's remaining work). Enemies and Isaac are boxes/cones/cylinders. Renderer has no tone mapping and no post-processing; scanlines and vignette are CSS overlays (`.crt-overlay`, `.vignette-overlay`).
+Practical lights carry the color (red `red.core` always flickering, cold white `light.corridor`); heavy darkness (fog `metal.void` @0.08). Walls/floor/ceiling are `MeshStandardMaterial` with a single canvas color map (grays unified into the `metal` ramp), `metalness` 0.65–0.9 and **no environment map**, which renders them nearly black/flat (relief maps now derive from the color maps; see Proposal 004). Enemies and Isaac are boxes/cones/cylinders. Renderer has no tone mapping and no post-processing; scanlines and vignette are CSS overlays (`.crt-overlay`, `.vignette-overlay`).
+
+### TODO: environment details from owner reference screenshots (2026-11-04)
+Pending props/decals/effects, to add as `PROPS` entries / theme data (no per-area code):
+- Ceiling beam grid: crossing beams and long parallel conduit bundles (not just single beams).
+- Wall paneling: recessed panels, structural ribs and door frames with a vertical light strip.
+- Signage: wall signs and holographic door status panels (diegetic, Spanish copy).
+- Low ground fog / volumetric haze near the floor (cheap sprites or additive cones, no post-processing).
+- Better cargo containers: beveled/curved straps, stacked crates of different sizes, tilted/fallen ones.
+- Clutter and storytelling: overturned wheelchairs, debris, bodies, scattered equipment.
+- Grated floor with worn/wet patches (roughness variation) and dark stains.
 
 ## 7. Holographic inventory (implemented, phases 1–4 of Proposal 003)
 
@@ -205,7 +217,7 @@ Open requires `missionStarted`, not paused, not dead/won, no menu open. It sets 
 ### 9.2 Visual overhaul (Proposal 004) — first attempt reverted
 - Tried: ACES tone mapping + procedural `RoomEnvironment` IBL + bloom + film grain + vignette + chromatic aberration, a desaturated "remake" palette and derived normal/roughness maps. **The owner rejected the result: "it gives a completely different look".** All code was reverted; `proposals/004-VISUAL-OVERHAUL.md` stays as a reference.
 - **Revised direction (owner, 2026-11-02):** a **rustic palette of metallic colors, no filter** (no tone mapping / bloom / grain / color grading passes), **lights with more noticeable colors**, and **keep the heavy darkness** so the **flashlight mechanic (Proposal 001) is emphasized**. Enemies and environment should still be made less simple, but within that look.
-- **Accepted plan (2026-11-02): aesthetics as data.** Proposal 004 was rewritten: an `AreaTheme` per area (atmosphere, surfaces, light mix; later props, decals, enemy mix), referenced by the future `SectorDef`, so new areas/chapters (the 12 *Dead Space* chapters ~ 6 themes) need only data. Acceptance test per step: *can a new area be added by touching only data files?* Done: theme infra (texture cache with `TextureFactory.surface()/disposeSurfaces()`) and the palette unification (`Palette.ts`, section 6). Next: materials with relief (derived normal/roughness maps), props registry + `InstancedMesh`, enemy builder (hitboxes untouched), a second theme as scalability proof.
+- **Accepted plan (2026-11-02): aesthetics as data.** Proposal 004 was rewritten: an `AreaTheme` per area (atmosphere, surfaces, light mix; later props, decals, enemy mix), referenced by the future `SectorDef`, so new areas/chapters (the 12 *Dead Space* chapters ~ 6 themes) need only data. Acceptance test per step: *can a new area be added by touching only data files?* Done: props registry (`world/props/`, `AreaTheme.props` lists `{id, density}`; `ShipLevel(scene, themeId, seed)` places them, colliders appended to `colliders`), theme infra (texture cache with `TextureFactory.surface()/disposeSurfaces()`) and the palette unification (`Palette.ts`, section 6). Relief maps are done (`TextureFactory.surfaceMaps()` derives normal + roughness from luminance; `SurfaceDef.relief` sets strength). Next: more props/decals (see TODO list), enemy builder (hitboxes untouched), a second theme as scalability proof.
 - Performance guardrail for bigger areas: cap real `PointLight`s to the N nearest (pool), others emissive meshes; one shadow light (flashlight); dispose on sector change.
 - Useful findings to reuse: (a) `metalness` 0.8–0.9 with no environment map makes metals render almost black — consider lowering metalness / brightening albedo / a very subtle envMap **without** tone mapping; (b) `TextureFactory` canvas maps could gain derived normal/roughness maps (Sobel on luminance) for relief; (c) enemy remodel must keep the limb hierarchy and `LimbMesh` hitboxes so dismemberment/AI do not change.
 

@@ -20,6 +20,7 @@ export const PALETTE = {
     m900: 0x0e1014,
     m800: 0x16181c,
     m700: 0x22262c,
+    steel: 0x2c3846, // blue-gray cargo steel
     m500: 0x3d4450,
     m300: 0x6b7280
   },

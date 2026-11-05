@@ -33,10 +33,20 @@ Suggested themes for the 12 chapters: Medical, Engineering, Hydroponics, Mining,
 
 1. **Theme infrastructure, no visual change** — *done*. `AreaTheme` + `THEMES['ishimura-default']` reproducing the current look; `ShipLevel(scene, themeId)` reads surfaces and light mix from the theme; `Engine.applyAtmosphere(theme)` sets fog/ambient; `TextureFactory.surface(id)` caches textures (`disposeSurfaces()` for sector changes).
 2. **Unified palette** — *done*. `src/graphics/Palette.ts` is the single source of color (~35 tokens; `core`/`mid`/`dim` saturation levels), CSS reads `--c-*` variables, `bun run check:palette` blocks stray literals. World uses `mid`, `core` is reserved for Isaac's tech and tiny emissives.
-3. **Materials with relief** — rustic metals, brighter albedo / lower metalness (or a very subtle envMap without tone mapping), derived normal + roughness maps (Sobel on luminance) cached per surface; more saturated practical lights. Done by editing the theme + TextureFactory params, first for a Medical theme.
-4. **Props as a registry** — `PROPS: Record<PropId, PropDef>` (geometry, material, placement rule: wall / ceiling / corner / floor). Seeded placement driven by the theme; one `InstancedMesh` per prop type. Pipes, conduits, vents, crates, trim.
+3. **Materials with relief** — *done* (`TextureFactory.surfaceMaps()`, `SurfaceDef.relief`; walls, floor, ceiling and crates). rustic metals, brighter albedo / lower metalness (or a very subtle envMap without tone mapping), derived normal + roughness maps (Sobel on luminance) cached per surface; more saturated practical lights. Done by editing the theme + TextureFactory params, first for a Medical theme.
+4. **Props as a registry** — *first version done* (`src/world/props/`: pipe, trim, vent, conduit, crate; seeded, instanced; more props/decals pending). `PROPS: Record<PropId, PropDef>` (geometry, material, placement rule: wall / ceiling / corner / floor). Seeded placement driven by the theme; one `InstancedMesh` per prop type. Pipes, conduits, vents, crates, trim.
 5. **Enemy builder** — keep the `LimbMesh` hierarchy and hitboxes untouched (gameplay). Appearance moves to a per-morphology builder (capsule/lathe/tube, vertex noise, wet skin, stump caps, procedural idle) with scale/tint variants. New enemy = new morphology, not duplicated logic.
 6. **Second theme** (e.g. Engineering) added with data only: the scalability proof. Then Isaac's suit.
+
+### TODO: environment details from owner reference screenshots (2026-11-04)
+Pending props/decals/effects, to add as `PROPS` entries / theme data (no per-area code):
+- Ceiling beam grid: crossing beams and long parallel conduit bundles (not just single beams).
+- Wall paneling: recessed panels, structural ribs and door frames with a vertical light strip.
+- Signage: wall signs and holographic door status panels (diegetic, Spanish copy).
+- Low ground fog / volumetric haze near the floor (cheap sprites or additive cones, no post-processing).
+- Better cargo containers: beveled/curved straps, stacked crates of different sizes, tilted/fallen ones.
+- Clutter and storytelling: overturned wheelchairs, debris, bodies, scattered equipment.
+- Grated floor with worn/wet patches (roughness variation) and dark stains.
 
 ## 5. Performance guardrails (needed for bigger areas)
 
