@@ -41,7 +41,9 @@ export const PALETTE = {
     bone: 0x83776e,
     blood: 0x990000,
     viscera: 0x770000,
-    leather: 0x2d3748 // Leaper hide
+    leather: 0x2d3748, // Leaper hide / dark chitin
+    sallow: 0x6f7a6c, // Leaper skin (greenish gray)
+    pallid: 0x80858a // Exploder skin (pale blue-gray)
   },
   /** Explosions and fire (legacy values). */
   fire: {

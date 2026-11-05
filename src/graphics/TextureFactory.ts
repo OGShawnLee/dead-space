@@ -5,7 +5,9 @@ import { PALETTE, hex } from './Palette';
  * Procedural Texture Generator
  * Generates all textures in runtime using HTML5 Canvas (Zero external image dependencies)
  */
-export type SurfaceId = 'metalWall' | 'floorGrate' | 'floorPlate' | 'ceiling' | 'crateSteel';
+export type SurfaceId =
+  | 'metalWall' | 'floorGrate' | 'floorPlate' | 'ceiling' | 'crateSteel'
+  | 'necroSlasher' | 'necroLeaper' | 'necroExploder';
 
 export class TextureFactory {
   private static surfaceCache = new Map<string, CanvasTexture>();
@@ -19,6 +21,9 @@ export class TextureFactory {
         : id === 'floorGrate' ? this.createFloorGrate()
         : id === 'floorPlate' ? this.createFloorPlate()
         : id === 'crateSteel' ? this.createCrateSteel()
+        : id === 'necroSlasher' ? this.createNecroSkin(PALETTE.flesh.bone)
+        : id === 'necroLeaper' ? this.createNecroSkin(PALETTE.flesh.sallow)
+        : id === 'necroExploder' ? this.createNecroSkin(PALETTE.flesh.pallid)
         : this.createCeiling();
       this.surfaceCache.set(id, tex);
     }
@@ -479,29 +484,57 @@ export class TextureFactory {
     return new CanvasTexture(canvas);
   }
 
-  static createNecroSkin(): CanvasTexture {
+  /** Necromorph skin: mottled base, bruised blotches, wounds, veins and tendon streaks. */
+  static createNecroSkin(base: number = PALETTE.flesh.bone, wound: number = PALETTE.flesh.blood): CanvasTexture {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
+    const rgba = (n: number, a: number) => `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
 
-    ctx.fillStyle = hex(PALETTE.flesh.bone);
+    ctx.fillStyle = hex(base);
     ctx.fillRect(0, 0, 256, 256);
 
-    for (let i = 0; i < 60; i++) {
+    // Large pale and dark patches so the skin is not one flat tone
+    for (let i = 0; i < 18; i++) {
       const x = Math.random() * 256;
       const y = Math.random() * 256;
-      const r = Math.random() * 24 + 4;
-      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
-      grad.addColorStop(0, 'rgba(120, 20, 20, 0.7)');
-      grad.addColorStop(0.7, 'rgba(50, 10, 10, 0.4)');
+      const rad = 30 + Math.random() * 50;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      g.addColorStop(0, Math.random() < 0.5 ? 'rgba(0, 0, 0, 0.2)' : 'rgba(255, 255, 255, 0.08)');
+      g.addColorStop(1, 'transparent');
+      ctx.fillStyle = g;
+      ctx.fillRect(x - rad, y - rad, rad * 2, rad * 2);
+    }
+
+    // Raw wounds
+    for (let i = 0; i < 40; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 256;
+      const rad = Math.random() * 22 + 4;
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, rad);
+      grad.addColorStop(0, rgba(wound, 0.75));
+      grad.addColorStop(0.7, rgba(wound, 0.35));
       grad.addColorStop(1, 'transparent');
       ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.arc(x, y, rad, 0, Math.PI * 2);
       ctx.fill();
     }
 
+    // Tendon streaks, mostly vertical
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.09)';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 30; i++) {
+      const x = Math.random() * 256;
+      const y = Math.random() * 200;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + (Math.random() - 0.5) * 12, y + 20 + Math.random() * 60);
+      ctx.stroke();
+    }
+
+    // Veins
     ctx.strokeStyle = 'rgba(30, 20, 60, 0.5)';
     ctx.lineWidth = 1.5;
     for (let i = 0; i < 15; i++) {
@@ -517,7 +550,10 @@ export class TextureFactory {
       ctx.stroke();
     }
 
-    return new CanvasTexture(canvas);
+    const tex = new CanvasTexture(canvas);
+    tex.wrapS = RepeatWrapping;
+    tex.wrapT = RepeatWrapping;
+    return tex;
   }
 
   static createHoloAmmoCanvas(ammo: number, maxAmmo: number): HTMLCanvasElement {

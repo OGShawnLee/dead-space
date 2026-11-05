@@ -1,15 +1,16 @@
 import {
   Group,
   Mesh,
-  BoxGeometry,
   MeshStandardMaterial,
   PointLight,
   Vector3,
   Quaternion,
   Box3,
+  type BufferGeometry,
   type Scene
 } from 'three';
-import { TextureFactory } from '../graphics/TextureFactory';
+import { skinMaterial, boneMaterial } from '../graphics/EnemyMaterials';
+import * as anatomy from './anatomy';
 import { GibPart } from '../world/GibPart';
 import { checkLineOfSight } from '../world/LineOfSight';
 import type { SoundSystem } from '../core/SoundSystem';
@@ -58,19 +59,26 @@ export class Exploder {
   isCrawling = false;
 
   root = new Group();
-  matSkin = new MeshStandardMaterial({
-    map: TextureFactory.createNecroSkin(),
-    roughness: 0.75,
-    metalness: 0.1
-  });
+  matSkin = skinMaterial('exploder');
+  matBone = boneMaterial(PALETTE.flesh.bone);
+  idlePhase = Math.random() * 10;
 
   // Volatile glowing orange/yellow organic explosive material
   matSac = new MeshStandardMaterial({
-    color: PALETTE.amber.core,
+    color: PALETTE.amber.mid,
     emissive: PALETTE.fire.blast,
     emissiveIntensity: 0.85,
     roughness: 0.2,
     metalness: 0.1
+  });
+
+  // Fleshy, only faintly glowing pustules around the volatile core
+  matSacFlesh = new MeshStandardMaterial({
+    color: PALETTE.flesh.skin,
+    emissive: PALETTE.fire.blast,
+    emissiveIntensity: 0.3,
+    roughness: 0.35,
+    metalness: 0.05
   });
 
   torsoMesh!: Mesh;
@@ -96,6 +104,7 @@ export class Exploder {
     public bloodSys: BloodParticleSystem
   ) {
     this.root.position.copy(spawnPos);
+    this.root.scale.setScalar(0.94 + Math.random() * 0.14);
     this.scene.add(this.root);
     this.buildBody();
   }
@@ -114,91 +123,85 @@ export class Exploder {
   }
 
   buildBody(): void {
-    // 1. Hunched Torso
-    const torsoGeo = new BoxGeometry(0.52, 0.75, 0.38);
-    this.torsoMesh = new Mesh(torsoGeo, this.matSkin);
-    this.torsoMesh.position.y = 1.05;
-    this.torsoMesh.rotation.x = 0.2; // Hunched forward
+    // Tall, gaunt frame (~2.2 m): long legs, narrow hunched torso, arms that reach the floor.
+    // 1. Torso
+    this.torsoMesh = new Mesh(anatomy.torso(0.42, 0.95, 0.3, 5), this.matSkin);
+    this.torsoMesh.position.y = 1.38;
+    this.torsoMesh.rotation.x = 0.35; // Hunched forward
     this.tagLimb(this.torsoMesh, 'torso', 999);
     this.root.add(this.torsoMesh);
 
-    // 2. Twisted Head (HP: 25)
-    const headGeo = new BoxGeometry(0.28, 0.32, 0.32);
-    this.headMesh = new Mesh(headGeo, this.matSkin);
-    this.headMesh.position.set(0, 0.52, 0.12);
+    // 2. Small, twisted head (HP: 25)
+    this.headMesh = new Mesh(anatomy.head(0.24, 0.3, 0.28, 6), this.matSkin);
+    this.headMesh.position.set(0, 0.62, 0.2);
+    this.headMesh.rotation.z = 0.2;
     this.tagLimb(this.headMesh, 'head', 25);
     this.torsoMesh.add(this.headMesh);
 
-    // 3. Volatile Explosive Sac Arm (Left) (HP: 18 - 1 shot detonates it!)
+    // 3. Volatile sac arm (left): long thin arm dragging a cluster of sacs (HP: 18, one shot detonates it)
     this.armLGroup = new Group();
-    this.armLGroup.position.set(-0.38, 0.25, 0.05);
+    this.armLGroup.position.set(-0.3, 0.38, 0.05);
 
-    // Stumpy shoulder
-    const shoulderGeo = new BoxGeometry(0.2, 0.28, 0.2);
-    const shoulderMesh = new Mesh(shoulderGeo, this.matSkin);
-    shoulderMesh.position.y = -0.12;
-    this.armLGroup.add(shoulderMesh);
+    const upperArm = new Mesh(anatomy.limb(1.3, 0.085, 0.05, 0.2, 7), this.matSkin);
+    upperArm.position.y = -0.65;
+    this.armLGroup.add(upperArm);
 
-    // Grotesque rectangular mutated explosive sac cluster (fits the cuboid modular aesthetic)
     this.sacGroup = new Group();
-    this.sacGroup.position.set(-0.15, -0.45, 0.15);
+    this.sacGroup.position.set(-0.08, -1.3, 0.18);
 
-    // Main rectangular explosive core box
-    const mainSacGeo = new BoxGeometry(0.44, 0.65, 0.44);
-    this.sacMesh = new Mesh(mainSacGeo, this.matSac);
+    // Glowing core plus a ring of bumpy pustules (golden-angle spiral so they spread evenly)
+    this.sacMesh = new Mesh(anatomy.lump(0.24, 1).scale(1, 1.25, 1), this.matSac);
     this.sacGroup.add(this.sacMesh);
-
-    // Secondary protruding angular pustules
-    const pustuleGeo1 = new BoxGeometry(0.25, 0.28, 0.25);
-    const pustule1 = new Mesh(pustuleGeo1, this.matSac);
-    pustule1.position.set(-0.14, 0.16, 0.08);
-    pustule1.rotation.set(0.1, 0.2, -0.15);
-    this.sacGroup.add(pustule1);
-
-    const pustuleGeo2 = new BoxGeometry(0.26, 0.24, 0.28);
-    const pustule2 = new Mesh(pustuleGeo2, this.matSac);
-    pustule2.position.set(0.12, -0.18, -0.08);
-    pustule2.rotation.set(-0.1, -0.15, 0.1);
-    this.sacGroup.add(pustule2);
-
+    const pustules: Mesh[] = [];
+    for (let i = 0; i < 9; i++) {
+      const y = 1 - (i / 8) * 2;
+      const ring = Math.sqrt(Math.max(0, 1 - y * y));
+      const ang = i * 2.399963;
+      const rad = 0.11 + (i % 3) * 0.03;
+      const pustule = new Mesh(anatomy.lump(rad, 2 + i), i % 2 === 0 ? this.matSac : this.matSacFlesh);
+      pustule.position.set(Math.cos(ang) * ring * 0.26, y * 0.32, Math.sin(ang) * ring * 0.26);
+      this.sacGroup.add(pustule);
+      pustules.push(pustule);
+    }
     this.armLGroup.add(this.sacGroup);
 
     // Glowing sac core point light
     this.sacLight = new PointLight(PALETTE.fire.flame, 1.8, 4.0);
-    this.sacLight.position.set(-0.15, -0.45, 0.15);
+    this.sacLight.position.copy(this.sacGroup.position);
     this.armLGroup.add(this.sacLight);
 
     this.tagLimb(this.sacMesh, 'explosive_sac', 18);
-    this.tagLimb(pustule1, 'explosive_sac', 18);
-    this.tagLimb(pustule2, 'explosive_sac', 18);
-    this.tagLimb(shoulderMesh, 'explosive_sac', 18);
+    pustules.forEach(p => this.tagLimb(p, 'explosive_sac', 18));
+    this.tagLimb(upperArm, 'explosive_sac', 18);
     this.torsoMesh.add(this.armLGroup);
 
-    // 4. Right Arm (Deformed claw) (HP: 25)
+    // 4. Right arm: very long, clawed hand near the floor (HP: 25)
     this.armRGroup = new Group();
-    this.armRGroup.position.set(0.38, 0.25, 0);
-    const armRGeo = new BoxGeometry(0.16, 0.55, 0.16);
-    this.armRMesh = new Mesh(armRGeo, this.matSkin);
-    this.armRMesh.position.y = -0.25;
+    this.armRGroup.position.set(0.3, 0.38, 0);
+    this.armRMesh = new Mesh(anatomy.limb(1.6, 0.08, 0.045, 0.25, 8), this.matSkin);
+    this.armRMesh.position.y = -0.8;
     this.tagLimb(this.armRMesh, 'arm_right', 25);
+    const clawHand = new Mesh(anatomy.claws(3, 0.3, 0.025, 0.6), this.matBone);
+    clawHand.position.y = -0.8;
+    this.armRMesh.add(clawHand);
     this.armRGroup.add(this.armRMesh);
     this.torsoMesh.add(this.armRGroup);
 
-    // 5. Left Leg (HP: 25)
+    // 5. Left leg (HP: 25)
     this.legLGroup = new Group();
-    this.legLGroup.position.set(-0.18, -0.38, 0);
-    const legGeo = new BoxGeometry(0.18, 0.72, 0.18);
+    this.legLGroup.position.set(-0.15, -0.44, 0);
+    const legGeo = anatomy.limb(1.0, 0.09, 0.055, 0.3, 9);
     this.legLMesh = new Mesh(legGeo, this.matSkin);
-    this.legLMesh.position.y = -0.35;
+    this.legLMesh.position.y = -0.5;
     this.tagLimb(this.legLMesh, 'leg_left', 25);
     this.legLGroup.add(this.legLMesh);
     this.torsoMesh.add(this.legLGroup);
 
-    // 6. Right Leg (HP: 25)
+    // 6. Right leg (HP: 25)
     this.legRGroup = new Group();
-    this.legRGroup.position.set(0.18, -0.38, 0);
+    this.legRGroup.position.set(0.15, -0.44, 0);
     this.legRMesh = new Mesh(legGeo, this.matSkin);
-    this.legRMesh.position.y = -0.35;
+    this.legRMesh.position.y = -0.5;
     this.tagLimb(this.legRMesh, 'leg_right', 25);
     this.legRGroup.add(this.legRMesh);
     this.torsoMesh.add(this.legRGroup);
@@ -253,7 +256,7 @@ export class Exploder {
       parentGroup.remove(targetMesh);
 
       const gibGeo = targetMesh instanceof Group
-        ? new BoxGeometry(0.2, 0.65, 0.2)
+        ? anatomy.limb(1.0, 0.08, 0.05)
         : targetMesh.geometry.clone();
       this.gibList.push(new GibPart(this.scene, gibGeo, this.matSkin, worldPos, worldQuat, hitNormal || new Vector3(0, 1, 0)));
 
@@ -299,7 +302,7 @@ export class Exploder {
     this.bloodSys.spawnSplatter(blastCenter, new Vector3(0, 1, 0), 45);
 
     // Turn all remaining body parts into physical bouncing GibParts
-    const spawnPartGib = (mesh: Mesh | Group, baseGeo?: BoxGeometry): void => {
+    const spawnPartGib = (mesh: Mesh | Group, baseGeo?: BufferGeometry): void => {
       const worldPos = new Vector3();
       const worldQuat = new Quaternion();
       mesh.getWorldPosition(worldPos);
@@ -321,7 +324,7 @@ export class Exploder {
       } else if (mesh instanceof Mesh && mesh.geometry) {
         geo = mesh.geometry.clone();
       } else {
-        geo = new BoxGeometry(0.2, 0.55, 0.2);
+        geo = anatomy.limb(0.55, 0.1, 0.07);
       }
 
       this.gibList.push(new GibPart(this.scene, geo, this.matSkin, worldPos, worldQuat, impulse));
@@ -329,22 +332,22 @@ export class Exploder {
 
     // 1. Head gib
     if (this.hasHead && this.headMesh) {
-      spawnPartGib(this.headMesh, new BoxGeometry(0.28, 0.32, 0.32));
+      spawnPartGib(this.headMesh, anatomy.head(0.24, 0.3, 0.28));
     }
 
     // 2. Right Arm gib
     if (this.hasArmR && this.armRGroup) {
-      spawnPartGib(this.armRGroup, new BoxGeometry(0.16, 0.55, 0.16));
+      spawnPartGib(this.armRGroup, anatomy.limb(1.6, 0.08, 0.045));
     }
 
     // 3. Left Leg gib
     if (this.hasLegL && this.legLGroup) {
-      spawnPartGib(this.legLGroup, new BoxGeometry(0.18, 0.72, 0.18));
+      spawnPartGib(this.legLGroup, anatomy.limb(1.0, 0.09, 0.055));
     }
 
     // 4. Right Leg gib
     if (this.hasLegR && this.legRGroup) {
-      spawnPartGib(this.legRGroup, new BoxGeometry(0.18, 0.72, 0.18));
+      spawnPartGib(this.legRGroup, anatomy.limb(1.0, 0.09, 0.055));
     }
 
     // 5. Shattered Torso meaty gibs (flesh & rib chunks)
@@ -354,9 +357,9 @@ export class Exploder {
     this.torsoMesh.getWorldQuaternion(torsoQuat);
 
     const chunkGeos = [
-      new BoxGeometry(0.34, 0.38, 0.28),
-      new BoxGeometry(0.28, 0.30, 0.24),
-      new BoxGeometry(0.22, 0.24, 0.20)
+      anatomy.body(0.34, 0.38, 0.28, 1),
+      anatomy.body(0.28, 0.30, 0.24, 2),
+      anatomy.body(0.22, 0.24, 0.20, 3)
     ];
 
     chunkGeos.forEach(cGeo => {
@@ -439,6 +442,8 @@ export class Exploder {
         this.bloodSys.spawnStasisSparks(sparkPos, 3);
       }
     }
+
+    anatomy.idleBreath(this.torsoMesh, this.hasHead ? this.headMesh : null, performance.now() / 1000, this.idlePhase);
 
     // Pulsate glowing amber sac
     if (this.hasSac && this.sacLight) {

@@ -1,15 +1,13 @@
 import {
   Group,
   Mesh,
-  BoxGeometry,
-  ConeGeometry,
-  MeshStandardMaterial,
   Vector3,
   Quaternion,
   Box3,
   type Scene
 } from 'three';
-import { TextureFactory } from '../graphics/TextureFactory';
+import { skinMaterial, boneMaterial } from '../graphics/EnemyMaterials';
+import * as anatomy from './anatomy';
 import { GibPart } from '../world/GibPart';
 import { checkLineOfSight } from '../world/LineOfSight';
 import type { SoundSystem } from '../core/SoundSystem';
@@ -61,17 +59,9 @@ export class Leaper {
   hasArmR = true;
 
   root = new Group();
-  matSkin = new MeshStandardMaterial({
-    map: TextureFactory.createNecroSkin(),
-    roughness: 0.65,
-    metalness: 0.2
-  });
-
-  matBlade = new MeshStandardMaterial({
-    color: PALETTE.flesh.leather,
-    roughness: 0.25,
-    metalness: 0.85
-  });
+  matSkin = skinMaterial('leaper');
+  matBlade = boneMaterial(PALETTE.flesh.leather);
+  idlePhase = Math.random() * 10;
 
   torsoMesh!: Mesh;
   headMesh!: Mesh;
@@ -80,6 +70,7 @@ export class Leaper {
   armRGroup!: Group;
   armRMesh!: Mesh;
   tailGroup!: Group;
+  tailMesh!: Mesh;
   tailBladeMesh!: Mesh;
 
   constructor(
@@ -90,6 +81,7 @@ export class Leaper {
     public bloodSys: BloodParticleSystem
   ) {
     this.root.position.copy(spawnPos);
+    this.root.scale.setScalar(0.94 + Math.random() * 0.14);
     this.scene.add(this.root);
     this.buildBody();
   }
@@ -108,39 +100,42 @@ export class Leaper {
   }
 
   buildBody(): void {
-    // 1. Low Crouched Torso (Height 0.55m off the ground)
-    const torsoGeo = new BoxGeometry(0.55, 0.45, 0.7);
-    this.torsoMesh = new Mesh(torsoGeo, this.matSkin);
+    // 1. Low crouched torso (0.55m off the ground) with a dorsal ridge of bone knobs
+    this.torsoMesh = new Mesh(anatomy.body(0.55, 0.45, 0.7, 11), this.matSkin);
     this.torsoMesh.position.y = 0.55;
     this.torsoMesh.rotation.x = -0.15; // Low angled profile
     this.tagLimb(this.torsoMesh, 'torso', 999);
     this.root.add(this.torsoMesh);
 
-    // 2. Feral Head (HP: 25)
-    const headGeo = new BoxGeometry(0.3, 0.3, 0.35);
-    this.headMesh = new Mesh(headGeo, this.matSkin);
+    const ridge = new Mesh(anatomy.spikeRow(7, 0.1, 0.04, 0.1), this.matBlade);
+    ridge.position.set(0, 0.19, -0.02);
+    this.torsoMesh.add(ridge);
+
+    // 2. Feral head (HP: 25) with fangs
+    this.headMesh = new Mesh(anatomy.head(0.3, 0.3, 0.35, 12), this.matSkin);
     this.headMesh.position.set(0, 0.22, 0.45);
     this.tagLimb(this.headMesh, 'head', 25);
     this.torsoMesh.add(this.headMesh);
 
-    // Jagged bone jaw
-    const jawGeo = new BoxGeometry(0.24, 0.12, 0.24);
-    const jawMesh = new Mesh(jawGeo, this.matBlade);
-    jawMesh.position.set(0, -0.12, 0.08);
-    this.headMesh.add(jawMesh);
+    const fangs = new Mesh(anatomy.tuskRow(4, 0.07, 0.016, 0.14), this.matBlade);
+    fangs.position.set(0, -0.1, 0.12);
+    this.headMesh.add(fangs);
 
-    // 3. Left Crawling Arm (HP: 25)
+    // 3. Left crawling arm (HP: 25)
     this.armLGroup = new Group();
     this.armLGroup.position.set(-0.38, 0.1, 0.25);
-    const armGeo = new BoxGeometry(0.18, 0.6, 0.18);
+    const armGeo = anatomy.limb(0.6, 0.09, 0.06, 0.3, 13);
     this.armLMesh = new Mesh(armGeo, this.matSkin);
     this.armLMesh.position.set(0, -0.25, 0);
     this.armLMesh.rotation.z = -0.3;
     this.armLGroup.add(this.armLMesh);
     this.tagLimb(this.armLMesh, 'arm_left', 25);
+    const clawL = new Mesh(anatomy.claws(3, 0.18, 0.02), this.matBlade);
+    clawL.position.y = -0.3;
+    this.armLMesh.add(clawL);
     this.torsoMesh.add(this.armLGroup);
 
-    // 4. Right Crawling Arm (HP: 25)
+    // 4. Right crawling arm (HP: 25)
     this.armRGroup = new Group();
     this.armRGroup.position.set(0.38, 0.1, 0.25);
     const armRMesh = new Mesh(armGeo, this.matSkin);
@@ -148,30 +143,26 @@ export class Leaper {
     armRMesh.rotation.z = 0.3;
     this.armRGroup.add(armRMesh);
     this.tagLimb(armRMesh, 'arm_right', 25);
+    const clawR = new Mesh(anatomy.claws(3, 0.18, 0.02), this.matBlade);
+    clawR.position.y = -0.3;
+    armRMesh.add(clawR);
     this.torsoMesh.add(this.armRGroup);
 
-    // 5. Giant Barbed Spinal Tail (HP: 25 - Severing eliminates leaping!)
+    // 5. Giant spinal tail ending in a barbed scythe (HP: 25 - severing it eliminates leaping!)
     this.tailGroup = new Group();
     this.tailGroup.position.set(0, 0.15, -0.35);
 
-    const tailSeg1 = new Mesh(new BoxGeometry(0.2, 0.2, 0.5), this.matSkin);
-    tailSeg1.position.set(0, 0.2, -0.25);
-    tailSeg1.rotation.x = 0.5;
-    this.tailGroup.add(tailSeg1);
+    const tail = anatomy.tail();
+    this.tailMesh = new Mesh(tail.geometry, this.matSkin);
+    this.tailGroup.add(this.tailMesh);
 
-    const tailSeg2 = new Mesh(new BoxGeometry(0.16, 0.16, 0.5), this.matSkin);
-    tailSeg2.position.set(0, 0.5, -0.45);
-    tailSeg2.rotation.x = 0.9;
-    this.tailGroup.add(tailSeg2);
-
-    const bladeGeo = new ConeGeometry(0.14, 0.85, 4);
-    bladeGeo.rotateX(-Math.PI / 2.3);
-    this.tailBladeMesh = new Mesh(bladeGeo, this.matBlade);
-    this.tailBladeMesh.position.set(0, 0.85, -0.35);
+    // Stinger at the tip, curling forward and down like a scorpion's
+    this.tailBladeMesh = new Mesh(anatomy.scythe(0.7, 0.07, 0.3), this.matBlade);
+    this.tailBladeMesh.position.copy(tail.end).add(new Vector3(0, -0.12, 0.28));
+    this.tailBladeMesh.rotation.x = 0.55;
     this.tailGroup.add(this.tailBladeMesh);
 
-    this.tagLimb(tailSeg1, 'tail', 25);
-    this.tagLimb(tailSeg2, 'tail', 25);
+    this.tagLimb(this.tailMesh, 'tail', 25);
     this.tagLimb(this.tailBladeMesh, 'tail', 25);
     this.torsoMesh.add(this.tailGroup);
   }
@@ -220,7 +211,7 @@ export class Leaper {
       parentGroup.remove(targetMesh);
 
       const gibGeo = targetMesh instanceof Group
-        ? (limbType === 'tail' ? new BoxGeometry(0.2, 0.8, 0.2) : new BoxGeometry(0.2, 0.5, 0.2))
+        ? (limbType === 'tail' ? anatomy.limb(0.8, 0.09, 0.05) : anatomy.limb(0.5, 0.09, 0.06))
         : targetMesh.geometry.clone();
       const gibMat = limbType === 'tail' ? this.matBlade : this.matSkin;
       this.gibList.push(new GibPart(this.scene, gibGeo, gibMat, worldPos, worldQuat, hitNormal || new Vector3(0, 1, 0)));
@@ -297,6 +288,8 @@ export class Leaper {
         return;
       }
     }
+
+    anatomy.idleBreath(this.torsoMesh, this.hasHead ? this.headMesh : null, performance.now() / 1000, this.idlePhase);
 
     // Tail scorpion idle twitch
     if (this.hasTail && this.tailGroup && !this.isLeaping) {

@@ -1,15 +1,13 @@
 import {
   Group,
   Mesh,
-  BoxGeometry,
-  ConeGeometry,
-  MeshStandardMaterial,
   Vector3,
   Quaternion,
   Box3,
   type Scene
 } from 'three';
-import { TextureFactory } from '../graphics/TextureFactory';
+import { skinMaterial, boneMaterial } from '../graphics/EnemyMaterials';
+import * as anatomy from './anatomy';
 import { GibPart } from '../world/GibPart';
 import { checkLineOfSight } from '../world/LineOfSight';
 import type { SoundSystem } from '../core/SoundSystem';
@@ -54,16 +52,9 @@ export class Necromorph {
   isCrawling = false;
 
   root = new Group();
-  matSkin = new MeshStandardMaterial({
-    map: TextureFactory.createNecroSkin(),
-    roughness: 0.7,
-    metalness: 0.15
-  });
-  matBlade = new MeshStandardMaterial({
-    color: PALETTE.flesh.skin,
-    roughness: 0.3,
-    metalness: 0.8
-  });
+  matSkin = skinMaterial('slasher');
+  matBlade = boneMaterial(PALETTE.flesh.skin);
+  idlePhase = Math.random() * 10;
 
   torsoMesh!: Mesh;
   headMesh!: Mesh;
@@ -86,6 +77,7 @@ export class Necromorph {
     public bloodSys: BloodParticleSystem
   ) {
     this.root.position.copy(spawnPos);
+    this.root.scale.setScalar(0.94 + Math.random() * 0.14);
     this.scene.add(this.root);
     this.buildDeformedBody();
   }
@@ -96,16 +88,18 @@ export class Necromorph {
   }
 
   buildDeformedBody(): void {
-    // 1. Torso
-    const torsoGeo = new BoxGeometry(0.55, 0.8, 0.35);
-    this.torsoMesh = new Mesh(torsoGeo, this.matSkin);
+    // 1. Torso: ribcage with a row of bone spikes along the spine
+    this.torsoMesh = new Mesh(anatomy.torso(0.55, 0.8, 0.35, 1), this.matSkin);
     this.torsoMesh.position.y = 1.15;
     this.tagLimb(this.torsoMesh, 'torso', 999);
     this.root.add(this.torsoMesh);
 
+    const spine = new Mesh(anatomy.spikeRow(6, 0.12, 0.035, 0.12).rotateX(-Math.PI / 2), this.matBlade);
+    spine.position.set(0, 0.05, -0.15);
+    this.torsoMesh.add(spine);
+
     // 2. Head (HP: 25)
-    const headGeo = new BoxGeometry(0.32, 0.38, 0.35);
-    this.headMesh = new Mesh(headGeo, this.matSkin);
+    this.headMesh = new Mesh(anatomy.head(0.32, 0.38, 0.35, 2), this.matSkin);
     this.headMesh.position.set(0, 0.58, 0);
     this.tagLimb(this.headMesh, 'head', 25);
     this.torsoMesh.add(this.headMesh);
@@ -113,13 +107,12 @@ export class Necromorph {
     // 3. Left Slasher Arm & Blade (HP: 25)
     this.armLGroup = new Group();
     this.armLGroup.position.set(-0.4, 0.3, 0);
-    const armUpperGeo = new BoxGeometry(0.18, 0.5, 0.18);
+    const armUpperGeo = anatomy.limb(0.5, 0.1, 0.07, 0.3, 3);
     this.armLMesh = new Mesh(armUpperGeo, this.matSkin);
     this.armLMesh.position.y = -0.2;
     this.armLGroup.add(this.armLMesh);
 
-    const bladeGeo = new ConeGeometry(0.12, 1.2, 4);
-    bladeGeo.rotateX(Math.PI / 2.2);
+    const bladeGeo = anatomy.scythe(1.2, 0.09, 0.22);
     this.bladeLMesh = new Mesh(bladeGeo, this.matBlade);
     this.bladeLMesh.position.set(0, -0.45, 0.5);
     this.armLGroup.add(this.bladeLMesh);
@@ -146,7 +139,7 @@ export class Necromorph {
     // 5. Left Leg (HP: 25)
     this.legLGroup = new Group();
     this.legLGroup.position.set(-0.2, -0.4, 0);
-    const legGeo = new BoxGeometry(0.2, 0.75, 0.2);
+    const legGeo = anatomy.limb(0.75, 0.12, 0.075, 0.3, 4);
     this.legLMesh = new Mesh(legGeo, this.matSkin);
     this.legLMesh.position.y = -0.35;
     this.tagLimb(this.legLMesh, 'leg_left', 25);
@@ -220,7 +213,7 @@ export class Necromorph {
       parentGroup.remove(targetMesh);
 
       const gibGeo = targetMesh instanceof Group
-        ? new BoxGeometry(0.25, 0.65, 0.25)
+        ? anatomy.limb(0.65, 0.1, 0.07)
         : targetMesh.geometry.clone();
       this.gibList.push(new GibPart(this.scene, gibGeo, this.matSkin, worldPos, worldQuat, hitNormal || new Vector3(0, 1, 0)));
 
@@ -287,6 +280,7 @@ export class Necromorph {
     }
 
     this.attackCooldown -= effectiveDt;
+    anatomy.idleBreath(this.torsoMesh, this.hasHead ? this.headMesh : null, performance.now() / 1000, this.idlePhase);
 
     if (!this.hasArmL && !this.hasArmR) {
       this.bleedOutTimer -= effectiveDt;
